@@ -1,0 +1,117 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Fraunces", Georgia, serif;
+  --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
+
+  --color-ink: #1a2421;
+  --color-ink-muted: #5c6b66;
+  --color-forest: #1b4d3e;
+  --color-forest-deep: #12352b;
+  --color-leaf: #2f6b56;
+  --color-mist: #e8eeeb;
+  --color-fog: #f4f7f5;
+  --color-sand: #e8d5c4;
+  --color-sand-deep: #c9a98a;
+  --color-blush: #d4a5a5;
+  --color-surface: #ffffff;
+  --color-line: #d5e0db;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background:
+    radial-gradient(ellipse 80% 50% at 10% -10%, rgba(232, 213, 196, 0.45), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(47, 107, 86, 0.12), transparent 50%),
+    linear-gradient(165deg, #f7faf8 0%, #eef3f0 45%, #e8eeeb 100%);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.45s ease-out both;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out both;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.25s ease-out both;
+}
+
+.stagger-1 {
+  animation-delay: 0.05s;
+}
+.stagger-2 {
+  animation-delay: 0.1s;
+}
+.stagger-3 {
+  animation-delay: 0.15s;
+}
+.stagger-4 {
+  animation-delay: 0.2s;
+}
+
+/* Custom scrollbar */
+.scroll-nice::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scroll-nice::-webkit-scrollbar-thumb {
+  background: var(--color-line);
+  border-radius: 999px;
+}
+.scroll-nice::-webkit-scrollbar-track {
+  background: transparent;
+}
