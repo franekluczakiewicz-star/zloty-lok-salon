@@ -50,7 +50,7 @@ export function AppointmentForm({
     const priceNum = Number(price)
     const durationNum = Number(durationMin)
     if (!stylistId || !selected) {
-      setError('Wybierz fryzjerkę: Ania, Ewa lub Roksana.')
+      setError('Wybierz, kto to zrobi: Ania, Ewa lub Roksana.')
       return
     }
     if (!serviceName.trim() || !date || !time) {
@@ -77,17 +77,14 @@ export function AppointmentForm({
   return (
     <Modal title="Nowa wizyta" onClose={onClose} wide>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Fryzjerka">
+        <Field label="Kto to zrobi">
           <div className="grid grid-cols-3 gap-2">
             {STYLISTS.map((stylist) => {
               const active = stylistId === stylist.id
-              const locked =
-                initialStylistId != null && stylist.id !== initialStylistId
               return (
                 <button
                   key={stylist.id}
                   type="button"
-                  disabled={locked}
                   onClick={() => {
                     setStylistId(stylist.id)
                     setError('')
@@ -95,16 +92,12 @@ export function AppointmentForm({
                   className={`rounded-2xl border px-3 py-3 text-center text-sm font-semibold transition ${
                     active
                       ? 'border-forest bg-mist text-forest ring-2 ring-forest/20'
-                      : locked
-                        ? 'cursor-not-allowed border-line bg-fog/50 text-ink-muted/40'
-                        : 'border-line bg-fog text-ink-muted hover:bg-surface hover:text-ink'
+                      : 'border-line bg-fog text-ink-muted hover:bg-surface hover:text-ink'
                   }`}
                 >
                   <span
                     className="mx-auto mb-1.5 flex h-8 w-8 items-center justify-center rounded-xl text-xs font-bold text-white"
-                    style={{
-                      backgroundColor: locked ? '#b8c4bf' : stylist.color,
-                    }}
+                    style={{ backgroundColor: stylist.color }}
                   >
                     {stylist.shortName[0]}
                   </span>
@@ -113,11 +106,9 @@ export function AppointmentForm({
               )
             })}
           </div>
-          {initialStylistId && (
-            <p className="mt-1.5 text-xs text-ink-muted">
-              Wizyta trafi do terminarza wybranej fryzjerki.
-            </p>
-          )}
+          <p className="mt-1.5 text-xs text-ink-muted">
+            Wybierz: Ania, Ewa lub Roksana
+          </p>
         </Field>
 
         <Field label="Klient (opcjonalnie)">

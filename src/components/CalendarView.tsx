@@ -40,7 +40,7 @@ export function CalendarView({ store }: CalendarViewProps) {
     roksana: new Date(),
   }))
   const [booking, setBooking] = useState<{
-    stylistId: StylistId
+    stylistId?: StylistId
     date: string
   } | null>(null)
 
@@ -73,43 +73,58 @@ export function CalendarView({ store }: CalendarViewProps) {
             Osobny kalendarz dla Ani, Ewy i Roksany.
           </p>
         </div>
-        <div className="flex items-center gap-1 rounded-2xl border border-line/80 bg-surface p-1 shadow-sm shadow-ink/5">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            className={btnGhost}
-            onClick={() => setMonth((m) => startOfMonth(addDays(m, -15)))}
-            aria-label="Poprzedni miesiąc"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-          <span className="min-w-36 px-2 text-center font-display text-lg font-semibold capitalize text-ink">
-            {format(month, 'LLLL yyyy', { locale: pl })}
-          </span>
-          <button
-            type="button"
-            className={btnGhost}
-            onClick={() => {
-              const now = new Date()
-              setMonth(startOfMonth(now))
-              setSelectedByStylist({
-                ania: now,
-                ewa: now,
-                roksana: now,
-              })
-            }}
-          >
-            Dziś
-          </button>
-          <button
-            type="button"
-            className={btnGhost}
+            className={btnPrimary}
             onClick={() =>
-              setMonth((m) => startOfMonth(addDays(endOfMonth(m), 1)))
+              setBooking({
+                stylistId: undefined,
+                date: format(new Date(), 'yyyy-MM-dd'),
+              })
             }
-            aria-label="Następny miesiąc"
           >
-            <ChevronRight className="h-5 w-5" />
+            <Plus className="h-4 w-4" />
+            Dodaj nową wizytę
           </button>
+          <div className="flex items-center gap-1 rounded-2xl border border-line/80 bg-surface p-1 shadow-sm shadow-ink/5">
+            <button
+              type="button"
+              className={btnGhost}
+              onClick={() => setMonth((m) => startOfMonth(addDays(m, -15)))}
+              aria-label="Poprzedni miesiąc"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <span className="min-w-36 px-2 text-center font-display text-lg font-semibold capitalize text-ink">
+              {format(month, 'LLLL yyyy', { locale: pl })}
+            </span>
+            <button
+              type="button"
+              className={btnGhost}
+              onClick={() => {
+                const now = new Date()
+                setMonth(startOfMonth(now))
+                setSelectedByStylist({
+                  ania: now,
+                  ewa: now,
+                  roksana: now,
+                })
+              }}
+            >
+              Dziś
+            </button>
+            <button
+              type="button"
+              className={btnGhost}
+              onClick={() =>
+                setMonth((m) => startOfMonth(addDays(endOfMonth(m), 1)))
+              }
+              aria-label="Następny miesiąc"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       </header>
 
