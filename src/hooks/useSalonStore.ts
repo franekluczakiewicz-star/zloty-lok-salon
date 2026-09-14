@@ -1,20 +1,49 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createSeedAppointments, seedClients } from '../data/seed'
-import type { Appointment, Client, ServiceRecord } from '../types'
-import { createId, normalizePhone } from '../types'
+import {
+  createDefaultSchedules,
+  normalizeSchedule,
+  type SchedulesMap,
+  type StylistSchedule,
+} from '../schedule'
+import type {
+  Appointment,
+  Client,
+  ServiceCatalogItem,
+  ServiceRecord,
+  StylistId,
+} from '../types'
+import { SERVICE_CATALOG, createId, normalizeCatalog, normalizePhone } from '../types'
 
-const STORAGE_KEY = 'zloty-lok-v4'
+const STORAGE_KEY = 'zloty-lok-v8'
 
 type StoreData = {
   clients: Client[]
   appointments: Appointment[]
+  schedules: SchedulesMap
+  catalog: ServiceCatalogItem[]
 }
 
 function loadStore(): StoreData {
+  const defaults = createDefaultSchedules()
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
-      return JSON.parse(raw) as StoreData
+      const parsed = JSON.parse(raw) as Partial<StoreData>
+      return {
+        clients: parsed.clients ?? [],
+        appointments: (parsed.appointments ?? []).filter(
+          (a) => Boolean(a.clientId) && Boolean(a.stylistId),
+        ),
+        schedules: {
+          ania: normalizeSchedule(parsed.schedules?.ania ?? defaults.ania),
+          ewa: normalizeSchedule(parsed.schedules?.ewa ?? defaults.ewa),
+          roksana: normalizeSchedule(
+            parsed.schedules?.roksana ?? defaults.roksana,
+          ),
+        },
+        catalog: normalizeCatalog(parsed.catalog),
+      }
     }
   } catch {
     /* ignore */
@@ -23,6 +52,8 @@ function loadStore(): StoreData {
   return {
     clients,
     appointments: createSeedAppointments(clients),
+    schedules: defaults,
+    catalog: SERVICE_CATALOG.map((s) => ({ ...s })),
   }
 }
 
@@ -32,13 +63,15 @@ export function useSalonStore() {
   const [appointments, setAppointments] = useState<Appointment[]>(
     data.appointments,
   )
+  const [schedules, setSchedules] = useState<SchedulesMap>(data.schedules)
+  const [catalog, setCatalog] = useState<ServiceCatalogItem[]>(data.catalog)
 
   useEffect(() => {
     localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ clients, appointments }),
+      JSON.stringify({ clients, appointments, schedules, catalog }),
     )
-  }, [clients, appointments])
+  }, [clients, appointments, schedules, catalog])
 
   const addClient = useCallback(
     (data: Omit<Client, 'id' | 'services' | 'createdAt'>) => {
@@ -120,6 +153,36 @@ export function useSalonStore() {
     setAppointments((prev) => prev.filter((a) => a.id !== id))
   }, [])
 
+  const updateSchedule = useCallback(
+    (stylistId: StylistId, schedule: StylistSchedule) => {
+      setSchedules((prev) => ({ ...prev, [stylistId]: schedule }))
+    },
+    [],
+  )
+
+  const updateCatalogItem = useCallback(
+    (name: string, patch: Partial<Pick<ServiceCatalogItem, 'price' | 'priceLabel' | 'durationMin'>>) => {
+      setCatalog((prev) =>
+        prev.map((item) => {
+          if (item.name !== name) return item
+          const next = { ...item, ...patch }
+          if (patch.price != null && patch.priceLabel == null) {
+            // jeśli etykieta była prostą ceną, zaktualizuj ją automatycznie
+            if (!item.priceLabel.includes('–') && !item.priceLabel.includes('-')) {
+              next.priceLabel = `${patch.price} zł`
+            }
+          }
+          return next
+        }),
+      )
+    },
+    [],
+  )
+
+  const resetCatalog = useCallback(() => {
+    setCatalog(SERVICE_CATALOG.map((s) => ({ ...s })))
+  }, [])
+
   const searchClients = useCallback(
     (query: string) => {
       const q = query.trim().toLowerCase()
@@ -161,6 +224,8 @@ export function useSalonStore() {
   return {
     clients,
     appointments,
+    schedules,
+    catalog,
     stats,
     addClient,
     updateClient,
@@ -170,6 +235,9 @@ export function useSalonStore() {
     addAppointment,
     updateAppointment,
     deleteAppointment,
+    updateSchedule,
+    updateCatalogItem,
+    resetCatalog,
     searchClients,
     getClient,
   }

@@ -25,7 +25,7 @@ type ClientDetailProps = {
   client: Client
   store: SalonStore
   onBack: () => void
-  onBook: () => void
+  onBook: (clientId: string) => void
 }
 
 export function ClientDetail({
@@ -91,7 +91,7 @@ export function ClientDetail({
               <button
                 type="button"
                 className="inline-flex items-center gap-2 rounded-2xl bg-sand px-4 py-2.5 text-sm font-semibold text-forest transition hover:bg-white"
-                onClick={() => onBook()}
+                onClick={() => onBook(client.id)}
               >
                 <CalendarPlus className="h-4 w-4" />
                 Umów wizytę
@@ -216,6 +216,7 @@ export function ClientDetail({
 
       {addingService && (
         <ServiceForm
+          catalog={store.catalog}
           onClose={() => setAddingService(false)}
           onSave={(data) => {
             store.addService(client.id, data)

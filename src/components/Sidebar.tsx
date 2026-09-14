@@ -1,4 +1,4 @@
-import { CalendarDays, Scissors, Search, Users } from 'lucide-react'
+import { CalendarDays, Clock3, Receipt, Scissors, Search, Users } from 'lucide-react'
 import { STYLISTS, type View } from '../types'
 
 type SidebarProps = {
@@ -14,7 +14,9 @@ type SidebarProps = {
 export function Sidebar({ view, onNavigate, stats }: SidebarProps) {
   const nav = [
     { id: 'clients' as const, label: 'Klienci', icon: Users },
-    { id: 'calendar' as const, label: 'Terminarz', icon: CalendarDays },
+    { id: 'calendar' as const, label: 'Terminarze', icon: CalendarDays },
+    { id: 'schedule' as const, label: 'Grafik', icon: Clock3 },
+    { id: 'prices' as const, label: 'Cennik', icon: Receipt },
   ]
 
   return (
@@ -55,9 +57,10 @@ export function Sidebar({ view, onNavigate, stats }: SidebarProps) {
         </ul>
       </div>
 
-      <nav className="animate-fade-up stagger-1 flex gap-2 lg:flex-col">
+      <nav className="animate-fade-up stagger-1 flex flex-wrap gap-2 lg:flex-col">
         {nav.map(({ id, label, icon: Icon }) => {
-          const active = view === id || (view === 'client-detail' && id === 'clients')
+          const active =
+            view === id || (view === 'client-detail' && id === 'clients')
           return (
             <button
               key={id}
@@ -70,7 +73,7 @@ export function Sidebar({ view, onNavigate, stats }: SidebarProps) {
               }`}
             >
               <Icon className="h-4 w-4" strokeWidth={2} />
-              {label === 'Terminarz' ? 'Terminarze' : label}
+              {label}
             </button>
           )
         })}
@@ -82,8 +85,6 @@ export function Sidebar({ view, onNavigate, stats }: SidebarProps) {
         </p>
         <div className="space-y-2 rounded-3xl border border-line/80 bg-surface/80 p-4 backdrop-blur">
           <StatRow label="Wizyty" value={String(stats.todayCount)} />
-          <StatRow label="Klienci" value={String(stats.clientsCount)} />
-          <StatRow label="Usługi w bazie" value={String(stats.totalServices)} />
         </div>
         <div className="rounded-3xl bg-forest p-4 text-sand">
           <Search className="mb-2 h-4 w-4 opacity-70" />

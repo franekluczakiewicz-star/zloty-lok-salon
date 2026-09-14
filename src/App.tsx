@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { CalendarView } from './components/CalendarView'
 import { ClientDetail } from './components/ClientDetail'
 import { ClientsView } from './components/ClientsView'
+import { PriceListView } from './components/PriceListView'
+import { ScheduleView } from './components/ScheduleView'
 import { Sidebar } from './components/Sidebar'
 import { useSalonStore } from './hooks/useSalonStore'
 import type { View } from './types'
@@ -10,6 +12,7 @@ export default function App() {
   const store = useSalonStore()
   const [view, setView] = useState<View>('calendar')
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null)
+  const [bookClientId, setBookClientId] = useState<string | null>(null)
 
   const selectedClient = selectedClientId
     ? store.getClient(selectedClientId)
@@ -46,7 +49,10 @@ export default function App() {
             client={selectedClient}
             store={store}
             onBack={goClients}
-            onBook={() => setView('calendar')}
+            onBook={(clientId) => {
+              setBookClientId(clientId)
+              setView('calendar')
+            }}
           />
         )}
 
@@ -54,7 +60,22 @@ export default function App() {
           <ClientsView store={store} onOpenClient={openClient} />
         )}
 
-        {view === 'calendar' && <CalendarView store={store} />}
+        {view === 'calendar' && (
+          <CalendarView
+            store={store}
+            initialClientId={bookClientId}
+            onInitialClientConsumed={() => setBookClientId(null)}
+          />
+        )}
+
+        {view === 'schedule' && (
+          <ScheduleView
+            schedules={store.schedules}
+            onUpdate={store.updateSchedule}
+          />
+        )}
+
+        {view === 'prices' && <PriceListView store={store} />}
       </main>
     </div>
   )

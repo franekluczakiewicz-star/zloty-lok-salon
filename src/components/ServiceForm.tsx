@@ -1,8 +1,10 @@
 import { useState } from 'react'
-import { SERVICE_CATALOG } from '../types'
+import type { ServiceCatalogItem } from '../types'
+import { ServiceCatalogSelect } from './PriceListView'
 import { Field, Modal, btnPrimary, btnSecondary, inputClass } from './ui'
 
 type ServiceFormProps = {
+  catalog: ServiceCatalogItem[]
   onClose: () => void
   onSave: (data: {
     name: string
@@ -13,18 +15,19 @@ type ServiceFormProps = {
   }) => void
 }
 
-export function ServiceForm({ onClose, onSave }: ServiceFormProps) {
-  const [name, setName] = useState<string>(SERVICE_CATALOG[0].name)
-  const [price, setPrice] = useState(String(SERVICE_CATALOG[0].price))
+export function ServiceForm({ catalog, onClose, onSave }: ServiceFormProps) {
+  const first = catalog[0]
+  const [name, setName] = useState<string>(first?.name ?? '')
+  const [price, setPrice] = useState(String(first?.price ?? 0))
   const [durationMin, setDurationMin] = useState(
-    String(SERVICE_CATALOG[0].durationMin),
+    String(first?.durationMin ?? 30),
   )
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [notes, setNotes] = useState('')
   const [error, setError] = useState('')
 
   function applyCatalog(catalogName: string) {
-    const item = SERVICE_CATALOG.find((s) => s.name === catalogName)
+    const item = catalog.find((s) => s.name === catalogName)
     setName(catalogName)
     if (item) {
       setPrice(String(item.price))
@@ -36,7 +39,12 @@ export function ServiceForm({ onClose, onSave }: ServiceFormProps) {
     e.preventDefault()
     const priceNum = Number(price)
     const durationNum = Number(durationMin)
-    if (!name.trim() || !date || Number.isNaN(priceNum) || Number.isNaN(durationNum)) {
+    if (
+      !name.trim() ||
+      !date ||
+      Number.isNaN(priceNum) ||
+      Number.isNaN(durationNum)
+    ) {
       setError('Uzupełnij poprawnie nazwę, datę, cenę i czas.')
       return
     }
@@ -52,28 +60,23 @@ export function ServiceForm({ onClose, onSave }: ServiceFormProps) {
   return (
     <Modal title="Dodaj usługę" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Usługa z katalogu">
-          <select
-            className={inputClass}
-            value={SERVICE_CATALOG.some((s) => s.name === name) ? name : ''}
-            onChange={(e) => {
-              if (e.target.value) applyCatalog(e.target.value)
+        <Field label="Usługa z cennika">
+          <ServiceCatalogSelect
+            catalog={catalog}
+            value={catalog.some((s) => s.name === name) ? name : ''}
+            onChange={(v) => {
+              if (v) applyCatalog(v)
             }}
-          >
-            <option value="">Własna / wybierz…</option>
-            {SERVICE_CATALOG.map((s) => (
-              <option key={s.name} value={s.name}>
-                {s.name} — {s.price} zł
-              </option>
-            ))}
-          </select>
+            allowEmpty
+            emptyLabel="Własna / wybierz…"
+          />
         </Field>
         <Field label="Nazwa usługi">
           <input
             className={inputClass}
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="np. Strzyżenie damskie"
+            placeholder="np. Strzyżenie z modelowaniem — średnie"
           />
         </Field>
         <div className="grid gap-4 sm:grid-cols-3">

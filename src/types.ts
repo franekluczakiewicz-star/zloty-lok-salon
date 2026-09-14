@@ -39,7 +39,7 @@ export type AppointmentStatus = 'planned' | 'done' | 'cancelled'
 export type Appointment = {
   id: string
   stylistId: StylistId
-  clientId?: string
+  clientId: string
   personName: string
   serviceName: string
   date: string
@@ -50,17 +50,328 @@ export type Appointment = {
   notes?: string
 }
 
-export type View = 'clients' | 'calendar' | 'client-detail'
+export type View = 'clients' | 'calendar' | 'client-detail' | 'schedule' | 'prices'
 
-export const SERVICE_CATALOG = [
-  { name: 'Strzyżenie damskie', price: 90, durationMin: 45 },
-  { name: 'Strzyżenie męskie', price: 60, durationMin: 30 },
-  { name: 'Koloryzacja', price: 220, durationMin: 120 },
-  { name: 'Balayage', price: 350, durationMin: 150 },
-  { name: 'Modelowanie', price: 80, durationMin: 40 },
-  { name: 'Regeneracja', price: 120, durationMin: 60 },
-  { name: 'Fryzura okolicznościowa', price: 180, durationMin: 90 },
-] as const
+export type ServiceCatalogItem = {
+  category: string
+  name: string
+  /** Domyślna / wyjściowa cena do formularza */
+  price: number
+  /** Tekst z cennika, np. „60–70 zł” */
+  priceLabel: string
+  durationMin: number
+}
+
+export const SERVICE_CATALOG: ServiceCatalogItem[] = [
+  // Strzyżenie damskie
+  {
+    category: 'Strzyżenie damskie',
+    name: 'Strzyżenie bez modelowania — krótkie',
+    price: 50,
+    priceLabel: '50 zł',
+    durationMin: 30,
+  },
+  {
+    category: 'Strzyżenie damskie',
+    name: 'Strzyżenie bez modelowania — średnie',
+    price: 60,
+    priceLabel: '60–70 zł',
+    durationMin: 40,
+  },
+  {
+    category: 'Strzyżenie damskie',
+    name: 'Strzyżenie bez modelowania — długie',
+    price: 80,
+    priceLabel: '80–100 zł',
+    durationMin: 50,
+  },
+  {
+    category: 'Strzyżenie damskie',
+    name: 'Strzyżenie z modelowaniem — krótkie',
+    price: 70,
+    priceLabel: '70 zł',
+    durationMin: 45,
+  },
+  {
+    category: 'Strzyżenie damskie',
+    name: 'Strzyżenie z modelowaniem — średnie',
+    price: 80,
+    priceLabel: '80–90 zł',
+    durationMin: 55,
+  },
+  {
+    category: 'Strzyżenie damskie',
+    name: 'Strzyżenie z modelowaniem — długie',
+    price: 100,
+    priceLabel: '100–120 zł',
+    durationMin: 65,
+  },
+  {
+    category: 'Strzyżenie damskie',
+    name: 'Strzyżenie na sucho',
+    price: 50,
+    priceLabel: '50–60 zł',
+    durationMin: 30,
+  },
+  {
+    category: 'Strzyżenie damskie',
+    name: 'Grzywka',
+    price: 10,
+    priceLabel: '10–20 zł',
+    durationMin: 15,
+  },
+
+  // Strzyżenie męskie
+  {
+    category: 'Strzyżenie męskie',
+    name: 'Strzyżenie klasyczne',
+    price: 40,
+    priceLabel: '40 zł',
+    durationMin: 30,
+  },
+  {
+    category: 'Strzyżenie męskie',
+    name: 'Strzyżenie + broda',
+    price: 55,
+    priceLabel: '55 zł',
+    durationMin: 40,
+  },
+  {
+    category: 'Strzyżenie męskie',
+    name: 'Strzyżenie + odsiwianie',
+    price: 60,
+    priceLabel: '60 zł',
+    durationMin: 45,
+  },
+
+  // Dziecięce
+  {
+    category: 'Strzyżenie dziecięce (do 6 lat)',
+    name: 'Strzyżenie klasyczne — chłopiec',
+    price: 35,
+    priceLabel: '35 zł',
+    durationMin: 25,
+  },
+  {
+    category: 'Strzyżenie dziecięce (do 6 lat)',
+    name: 'Strzyżenie — dziewczynka',
+    price: 40,
+    priceLabel: '40–50 zł',
+    durationMin: 30,
+  },
+
+  // Koloryzacja
+  {
+    category: 'Koloryzacja',
+    name: 'Koloryzacja jednolita — krótkie',
+    price: 130,
+    priceLabel: '130 zł',
+    durationMin: 90,
+  },
+  {
+    category: 'Koloryzacja',
+    name: 'Koloryzacja jednolita — średnie',
+    price: 140,
+    priceLabel: '140–160 zł',
+    durationMin: 105,
+  },
+  {
+    category: 'Koloryzacja',
+    name: 'Koloryzacja jednolita — długie',
+    price: 180,
+    priceLabel: '180–250 zł',
+    durationMin: 120,
+  },
+  {
+    category: 'Koloryzacja',
+    name: 'Pasemka — krótkie',
+    price: 150,
+    priceLabel: '150–180 zł',
+    durationMin: 120,
+  },
+  {
+    category: 'Koloryzacja',
+    name: 'Pasemka — średnie',
+    price: 180,
+    priceLabel: '180–350 zł',
+    durationMin: 150,
+  },
+  {
+    category: 'Koloryzacja',
+    name: 'Pasemka — długie',
+    price: 400,
+    priceLabel: '400–600 zł',
+    durationMin: 180,
+  },
+  {
+    category: 'Koloryzacja',
+    name: 'Air Touch',
+    price: 300,
+    priceLabel: '300–600 zł',
+    durationMin: 180,
+  },
+  {
+    category: 'Koloryzacja',
+    name: 'Balayage — krótkie',
+    price: 180,
+    priceLabel: '180–230 zł',
+    durationMin: 150,
+  },
+  {
+    category: 'Koloryzacja',
+    name: 'Balayage — średnie',
+    price: 230,
+    priceLabel: '230–280 zł',
+    durationMin: 165,
+  },
+  {
+    category: 'Koloryzacja',
+    name: 'Balayage — długie',
+    price: 280,
+    priceLabel: '280–600 zł',
+    durationMin: 180,
+  },
+  {
+    category: 'Koloryzacja',
+    name: 'Ombre / Sombre — średnie',
+    price: 250,
+    priceLabel: '250–350 zł',
+    durationMin: 150,
+  },
+  {
+    category: 'Koloryzacja',
+    name: 'Ombre / Sombre — długie',
+    price: 350,
+    priceLabel: '350–600 zł',
+    durationMin: 180,
+  },
+  {
+    category: 'Koloryzacja',
+    name: 'Tonowanie — krótkie',
+    price: 100,
+    priceLabel: '100–130 zł',
+    durationMin: 45,
+  },
+  {
+    category: 'Koloryzacja',
+    name: 'Tonowanie — średnie',
+    price: 120,
+    priceLabel: '120–150 zł',
+    durationMin: 50,
+  },
+  {
+    category: 'Koloryzacja',
+    name: 'Tonowanie — długie',
+    price: 150,
+    priceLabel: '150–220 zł',
+    durationMin: 60,
+  },
+  {
+    category: 'Koloryzacja',
+    name: 'Dekoloryzacja globalna — krótkie',
+    price: 200,
+    priceLabel: '200–250 zł',
+    durationMin: 150,
+  },
+  {
+    category: 'Koloryzacja',
+    name: 'Dekoloryzacja globalna — średnie',
+    price: 250,
+    priceLabel: '250–350 zł',
+    durationMin: 180,
+  },
+  {
+    category: 'Koloryzacja',
+    name: 'Dekoloryzacja globalna — długie',
+    price: 350,
+    priceLabel: '350–500 zł',
+    durationMin: 210,
+  },
+
+  // Stylizacja
+  {
+    category: 'Stylizacja i modelowanie',
+    name: 'Modelowanie — krótkie',
+    price: 30,
+    priceLabel: '30 zł',
+    durationMin: 30,
+  },
+  {
+    category: 'Stylizacja i modelowanie',
+    name: 'Modelowanie — średnie',
+    price: 40,
+    priceLabel: '40 zł',
+    durationMin: 35,
+  },
+  {
+    category: 'Stylizacja i modelowanie',
+    name: 'Modelowanie — długie',
+    price: 50,
+    priceLabel: '50 zł',
+    durationMin: 40,
+  },
+  {
+    category: 'Stylizacja i modelowanie',
+    name: 'Upięcie',
+    price: 80,
+    priceLabel: '80–120 zł',
+    durationMin: 60,
+  },
+  {
+    category: 'Stylizacja i modelowanie',
+    name: 'Loki / Fale — krótkie',
+    price: 50,
+    priceLabel: '50 zł',
+    durationMin: 40,
+  },
+  {
+    category: 'Stylizacja i modelowanie',
+    name: 'Loki / Fale — średnie',
+    price: 60,
+    priceLabel: '60–70 zł',
+    durationMin: 50,
+  },
+  {
+    category: 'Stylizacja i modelowanie',
+    name: 'Loki / Fale — długie',
+    price: 80,
+    priceLabel: '80–120 zł',
+    durationMin: 60,
+  },
+]
+
+export const DEFAULT_SERVICE_CATALOG: ServiceCatalogItem[] = SERVICE_CATALOG
+
+export function servicesByCategory(catalog: ServiceCatalogItem[] = SERVICE_CATALOG) {
+  const categories = [...new Set(catalog.map((s) => s.category))]
+  return categories.map((category) => ({
+    category,
+    items: catalog.filter((s) => s.category === category),
+  }))
+}
+
+export function normalizeCatalog(
+  raw: unknown,
+): ServiceCatalogItem[] {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return SERVICE_CATALOG.map((s) => ({ ...s }))
+  }
+  return raw
+    .filter(
+      (item): item is ServiceCatalogItem =>
+        Boolean(item) &&
+        typeof item === 'object' &&
+        typeof (item as ServiceCatalogItem).name === 'string' &&
+        typeof (item as ServiceCatalogItem).price === 'number',
+    )
+    .map((item) => ({
+      category: item.category || 'Inne',
+      name: item.name,
+      price: item.price,
+      priceLabel: item.priceLabel || `${item.price} zł`,
+      durationMin: item.durationMin || 30,
+    }))
+}
 
 export function createId() {
   return crypto.randomUUID()
