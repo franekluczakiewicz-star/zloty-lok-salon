@@ -1,4 +1,4 @@
-import { CalendarDays, Clock3, Receipt, Scissors, Search, Users } from 'lucide-react'
+import { CalendarDays, Clock3, History, Palette, Receipt, Scissors, Search, Users } from 'lucide-react'
 import { STYLISTS, type View } from '../types'
 
 type SidebarProps = {
@@ -17,6 +17,8 @@ export function Sidebar({ view, onNavigate, stats }: SidebarProps) {
     { id: 'calendar' as const, label: 'Terminarze', icon: CalendarDays },
     { id: 'schedule' as const, label: 'Grafik', icon: Clock3 },
     { id: 'prices' as const, label: 'Cennik', icon: Receipt },
+    { id: 'dyes' as const, label: 'Farby', icon: Palette },
+    { id: 'history' as const, label: 'Historia', icon: History },
   ]
 
   return (

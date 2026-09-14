@@ -1,7 +1,7 @@
 import { addDays, format, isToday, parseISO } from 'date-fns'
 import { pl } from 'date-fns/locale'
-import { Check, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { Check, ChevronLeft, ChevronRight, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { SalonStore } from '../hooks/useSalonStore'
 import {
   getAvailabilityForDate,
@@ -12,6 +12,7 @@ import {
 } from '../schedule'
 import {
   STYLISTS,
+  formatDyeAmount,
   formatPrice,
   type Appointment,
   type AppointmentStatus,
@@ -47,7 +48,9 @@ export function CalendarView({
 }: CalendarViewProps) {
   const [day, setDay] = useState(() => new Date())
   const [booking, setBooking] = useState<BookingState | null>(null)
+  const [editingAptId, setEditingAptId] = useState<string | null>(null)
   const [selectedAptId, setSelectedAptId] = useState<string | null>(null)
+  const detailsRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!initialClientId) return
@@ -58,6 +61,11 @@ export function CalendarView({
     })
     onInitialClientConsumed?.()
   }, [initialClientId, onInitialClientConsumed])
+
+  useEffect(() => {
+    if (!selectedAptId) return
+    detailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [selectedAptId])
 
   const dayKey = format(day, 'yyyy-MM-dd')
 
@@ -86,6 +94,10 @@ export function CalendarView({
 
   const selectedApt = selectedAptId
     ? store.appointments.find((a) => a.id === selectedAptId)
+    : null
+
+  const editingApt = editingAptId
+    ? store.appointments.find((a) => a.id === editingAptId)
     : null
 
   return (
@@ -264,30 +276,36 @@ export function CalendarView({
         </div>
       </div>
 
-      {selectedApt && (
-        <AppointmentDetails
-          appointment={selectedApt}
-          onClose={() => setSelectedAptId(null)}
-          onStatus={(status) => {
-            store.updateAppointment(selectedApt.id, { status })
-            if (status === 'done' && selectedApt.clientId) {
-              store.addService(selectedApt.clientId, {
-                name: selectedApt.serviceName,
-                price: selectedApt.price,
-                durationMin: selectedApt.durationMin,
-                date: selectedApt.date,
-                notes: selectedApt.notes,
-              })
-            }
-            if (status === 'cancelled') setSelectedAptId(null)
-          }}
-          onDelete={() => {
-            if (confirm('Usunąć wizytę?')) {
-              store.deleteAppointment(selectedApt.id)
+      {selectedApt && !editingApt && (
+        <div ref={detailsRef}>
+          <AppointmentDetails
+            appointment={selectedApt}
+            onClose={() => setSelectedAptId(null)}
+            onEdit={() => {
+              setEditingAptId(selectedApt.id)
               setSelectedAptId(null)
-            }
-          }}
-        />
+            }}
+            onStatus={(status) => {
+              store.updateAppointment(selectedApt.id, { status })
+              if (status === 'done' && selectedApt.clientId) {
+                store.addService(selectedApt.clientId, {
+                  name: selectedApt.serviceName,
+                  price: selectedApt.price,
+                  durationMin: selectedApt.durationMin,
+                  date: selectedApt.date,
+                  notes: selectedApt.notes,
+                })
+              }
+              if (status === 'cancelled') setSelectedAptId(null)
+            }}
+            onDelete={() => {
+              if (confirm('Usunąć wizytę? Możesz ją potem przywrócić w Historii.')) {
+                store.deleteAppointment(selectedApt.id)
+                setSelectedAptId(null)
+              }
+            }}
+          />
+        </div>
       )}
 
       {booking && (
@@ -306,6 +324,25 @@ export function CalendarView({
             store.addAppointment(data)
             setDay(parseISO(data.date))
             setBooking(null)
+          }}
+        />
+      )}
+
+      {editingApt && (
+        <AppointmentForm
+          clients={store.clients}
+          appointments={store.appointments}
+          schedules={store.schedules}
+          catalog={store.catalog}
+          initialDate={editingApt.date}
+          appointment={editingApt}
+          onAddClient={store.addClient}
+          onClose={() => setEditingAptId(null)}
+          onSave={(data) => {
+            store.updateAppointment(editingApt.id, data)
+            setDay(parseISO(data.date))
+            setEditingAptId(null)
+            setSelectedAptId(editingApt.id)
           }}
         />
       )}
@@ -425,22 +462,30 @@ function DayColumn({
 function AppointmentDetails({
   appointment,
   onClose,
+  onEdit,
   onStatus,
   onDelete,
 }: {
   appointment: Appointment
   onClose: () => void
+  onEdit: () => void
   onStatus: (status: AppointmentStatus) => void
   onDelete: () => void
 }) {
   const stylist = STYLISTS.find((s) => s.id === appointment.stylistId)
+  const statusLabel =
+    appointment.status === 'done'
+      ? 'Wykonana'
+      : appointment.status === 'cancelled'
+        ? 'Anulowana'
+        : 'Zaplanowana'
 
   return (
     <div className="animate-fade-up rounded-3xl border border-line/80 bg-surface p-5 shadow-sm shadow-ink/5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold tracking-widest text-ink-muted uppercase">
-            Szczegóły wizyty
+            Szczegóły wizyty · {statusLabel}
           </p>
           <h2 className="mt-1 font-display text-2xl font-semibold text-ink">
             {appointment.personName}
@@ -453,39 +498,61 @@ function AppointmentDetails({
           <p className="mt-1 font-display text-lg font-semibold text-forest">
             {formatPrice(appointment.price)}
           </p>
+          {(appointment.dyeColor || appointment.dyeAmountG) && (
+            <p className="mt-2 text-sm text-ink">
+              Farba: <span className="font-semibold">{appointment.dyeColor || '—'}</span>
+              {appointment.dyeAmountG != null && (
+                <span className="text-ink-muted">
+                  {' '}
+                  · {formatDyeAmount(appointment.dyeAmountG)}
+                </span>
+              )}
+            </p>
+          )}
         </div>
         <button type="button" className={btnGhost} onClick={onClose}>
           Zamknij
         </button>
       </div>
 
-      {appointment.status === 'planned' && (
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 rounded-xl bg-mist px-4 py-2 text-sm font-semibold text-forest transition hover:bg-forest hover:text-sand"
-            onClick={() => onStatus('done')}
-          >
-            <Check className="h-4 w-4" />
-            Wykonana
-          </button>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-line px-4 py-2 text-sm font-semibold text-ink-muted transition hover:bg-mist"
-            onClick={() => onStatus('cancelled')}
-          >
-            <X className="h-4 w-4" />
-            Anuluj
-          </button>
-          <button
-            type="button"
-            className="ml-auto text-sm font-medium text-blush hover:underline"
-            onClick={onDelete}
-          >
-            Usuń
-          </button>
-        </div>
-      )}
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-line px-4 py-2 text-sm font-semibold text-ink transition hover:bg-mist"
+          onClick={onEdit}
+        >
+          <Pencil className="h-4 w-4" />
+          Edytuj
+        </button>
+        {appointment.status === 'planned' && (
+          <>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-mist px-4 py-2 text-sm font-semibold text-forest transition hover:bg-forest hover:text-sand"
+              onClick={() => onStatus('done')}
+            >
+              <Check className="h-4 w-4" />
+              Wykonana
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-line px-4 py-2 text-sm font-semibold text-ink-muted transition hover:bg-mist"
+              onClick={() => onStatus('cancelled')}
+            >
+              <X className="h-4 w-4" />
+              Anuluj
+            </button>
+          </>
+        )}
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-blush/40 bg-blush/10 px-4 py-2 text-sm font-semibold text-blush transition hover:bg-blush/20"
+          onClick={onDelete}
+        >
+          <Trash2 className="h-4 w-4" />
+          Usuń wizytę
+        </button>
+      </div>
     </div>
   )
 }

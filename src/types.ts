@@ -48,9 +48,25 @@ export type Appointment = {
   price: number
   status: AppointmentStatus
   notes?: string
+  /** Numer / nazwa farby (tylko koloryzacja) */
+  dyeColor?: string
+  /** Ilość farby w gramach */
+  dyeAmountG?: number
 }
 
-export type View = 'clients' | 'calendar' | 'client-detail' | 'schedule' | 'prices'
+/** Wizyta przeniesiona do historii (kosz) — można przywrócić */
+export type DeletedAppointment = Appointment & {
+  deletedAt: string
+}
+
+export type View =
+  | 'clients'
+  | 'calendar'
+  | 'client-detail'
+  | 'schedule'
+  | 'prices'
+  | 'history'
+  | 'dyes'
 
 export type ServiceCatalogItem = {
   category: string
@@ -348,6 +364,30 @@ export function servicesByCategory(catalog: ServiceCatalogItem[] = SERVICE_CATAL
     category,
     items: catalog.filter((s) => s.category === category),
   }))
+}
+
+export function isColoringService(
+  serviceName: string,
+  catalog: ServiceCatalogItem[] = SERVICE_CATALOG,
+) {
+  const item = catalog.find((s) => s.name === serviceName)
+  if (item) return item.category === 'Koloryzacja'
+  return /koloryzac|pasemk|balayage|ombre|sombre|tonowan|dekoloryzac|air\s*touch/i.test(
+    serviceName,
+  )
+}
+
+/** Sugestia ilości farby (g) wg długości włosów w nazwie usługi */
+export function defaultDyeAmountG(serviceName: string) {
+  if (/długie/i.test(serviceName)) return 60
+  if (/średnie/i.test(serviceName)) return 45
+  if (/krótkie/i.test(serviceName)) return 30
+  return 40
+}
+
+export function formatDyeAmount(grams: number) {
+  if (Number.isInteger(grams)) return `${grams} g`
+  return `${grams.toFixed(1)} g`
 }
 
 export function normalizeCatalog(

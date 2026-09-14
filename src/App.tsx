@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { CalendarView } from './components/CalendarView'
 import { ClientDetail } from './components/ClientDetail'
 import { ClientsView } from './components/ClientsView'
+import { DyeReportView } from './components/DyeReportView'
+import { HistoryView } from './components/HistoryView'
 import { PriceListView } from './components/PriceListView'
 import { ScheduleView } from './components/ScheduleView'
 import { Sidebar } from './components/Sidebar'
@@ -76,6 +78,10 @@ export default function App() {
         )}
 
         {view === 'prices' && <PriceListView store={store} />}
+
+        {view === 'dyes' && <DyeReportView store={store} />}
+
+        {view === 'history' && <HistoryView store={store} />}
       </main>
     </div>
   )

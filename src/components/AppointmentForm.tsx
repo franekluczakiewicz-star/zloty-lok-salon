@@ -8,7 +8,9 @@ import {
 import {
   STYLISTS,
   clientFullName,
+  defaultDyeAmountG,
   formatPhone,
+  isColoringService,
   type Appointment,
   type Client,
   type ServiceCatalogItem,
@@ -27,6 +29,8 @@ type AppointmentFormProps = {
   initialStylistId?: StylistId
   initialTime?: string
   initialClientId?: string
+  /** Gdy podane — edycja istniejącej wizyty */
+  appointment?: Appointment
   onClose: () => void
   onAddClient: (data: {
     firstName: string
@@ -47,27 +51,47 @@ export function AppointmentForm({
   initialStylistId,
   initialTime,
   initialClientId,
+  appointment,
   onClose,
   onAddClient,
   onSave,
 }: AppointmentFormProps) {
+  const isEdit = Boolean(appointment)
   const [stylistId, setStylistId] = useState<StylistId | null>(
-    initialStylistId ?? null,
+    appointment?.stylistId ?? initialStylistId ?? null,
   )
-  const [clientId, setClientId] = useState(initialClientId ?? '')
+  const [clientId, setClientId] = useState(
+    appointment?.clientId ?? initialClientId ?? '',
+  )
   const [clientQuery, setClientQuery] = useState('')
   const [showNewClient, setShowNewClient] = useState(false)
   const [serviceName, setServiceName] = useState<string>(
-    catalog[0]?.name ?? '',
+    appointment?.serviceName ?? catalog[0]?.name ?? '',
   )
-  const [price, setPrice] = useState(String(catalog[0]?.price ?? 0))
+  const [price, setPrice] = useState(
+    String(appointment?.price ?? catalog[0]?.price ?? 0),
+  )
   const [durationMin, setDurationMin] = useState(
-    String(catalog[0]?.durationMin ?? 30),
+    String(appointment?.durationMin ?? catalog[0]?.durationMin ?? 30),
   )
-  const [date, setDate] = useState(initialDate)
-  const [time, setTime] = useState(initialTime ?? '10:00')
-  const [notes, setNotes] = useState('')
+  const [dyeColor, setDyeColor] = useState(appointment?.dyeColor ?? '')
+  const [dyeAmountG, setDyeAmountG] = useState(
+    appointment?.dyeAmountG != null
+      ? String(appointment.dyeAmountG)
+      : String(
+          defaultDyeAmountG(
+            appointment?.serviceName ?? catalog[0]?.name ?? '',
+          ),
+        ),
+  )
+  const [date, setDate] = useState(appointment?.date ?? initialDate)
+  const [time, setTime] = useState(
+    appointment?.time ?? initialTime ?? '10:00',
+  )
+  const [notes, setNotes] = useState(appointment?.notes ?? '')
   const [error, setError] = useState('')
+
+  const isColoring = isColoringService(serviceName, catalog)
 
   const selectedStylist = stylistId
     ? STYLISTS.find((s) => s.id === stylistId)
@@ -83,12 +107,13 @@ export function AppointmentForm({
     return appointments
       .filter(
         (a) =>
+          a.id !== appointment?.id &&
           a.stylistId === stylistId &&
           a.date === date &&
           a.status !== 'cancelled',
       )
       .sort((a, b) => a.time.localeCompare(b.time))
-  }, [appointments, stylistId, date])
+  }, [appointments, stylistId, date, appointment?.id])
 
   const outsideSchedule = useMemo(() => {
     if (!stylistId) return false
@@ -134,12 +159,19 @@ export function AppointmentForm({
       setPrice(String(item.price))
       setDurationMin(String(item.durationMin))
     }
+    if (isColoringService(name, catalog)) {
+      setDyeAmountG(String(defaultDyeAmountG(name)))
+    } else {
+      setDyeColor('')
+      setDyeAmountG('')
+    }
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const priceNum = Number(price)
     const durationNum = Number(durationMin)
+    const dyeAmountNum = Number(dyeAmountG)
     if (!stylistId || !selectedStylist) {
       setError('Wybierz, kto to zrobi: Ania, Ewa lub Roksana.')
       return
@@ -155,6 +187,16 @@ export function AppointmentForm({
     if (Number.isNaN(priceNum) || Number.isNaN(durationNum)) {
       setError('Cena i czas muszą być liczbami.')
       return
+    }
+    if (isColoring) {
+      if (!dyeColor.trim()) {
+        setError('Podaj kolor / numer farby.')
+        return
+      }
+      if (Number.isNaN(dyeAmountNum) || dyeAmountNum <= 0) {
+        setError('Podaj ilość farby w gramach.')
+        return
+      }
     }
     if (outsideSchedule) {
       setError(
@@ -177,14 +219,16 @@ export function AppointmentForm({
       time,
       durationMin: durationNum,
       price: priceNum,
-      status: 'planned',
+      status: appointment?.status ?? 'planned',
       notes: notes.trim() || undefined,
+      dyeColor: isColoring ? dyeColor.trim() : undefined,
+      dyeAmountG: isColoring ? dyeAmountNum : undefined,
     })
   }
 
   return (
     <>
-      <Modal title="Nowa wizyta" onClose={onClose} wide>
+      <Modal title={isEdit ? 'Edytuj wizytę' : 'Nowa wizyta'} onClose={onClose} wide>
         <form onSubmit={handleSubmit} className="space-y-4">
           <Field label="Kto to zrobi">
             <div className="grid grid-cols-3 gap-2">
@@ -328,6 +372,35 @@ export function AppointmentForm({
             />
           </Field>
 
+          {isColoring && (
+            <div className="grid gap-4 rounded-2xl border border-sand/60 bg-sand/25 p-4 sm:grid-cols-2">
+              <Field label="Kolor / numer farby">
+                <input
+                  className={inputClass}
+                  value={dyeColor}
+                  onChange={(e) => setDyeColor(e.target.value)}
+                  placeholder="np. 7.1, Wella 8N…"
+                  required
+                />
+              </Field>
+              <Field label="Ilość farby (g)">
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  className={inputClass}
+                  value={dyeAmountG}
+                  onChange={(e) => setDyeAmountG(e.target.value)}
+                  required
+                />
+              </Field>
+              <p className="sm:col-span-2 text-xs text-ink-muted">
+                Przy koloryzacji podaj farbę — trafi do tygodniowego raportu zużycia
+                i zapotrzebowania.
+              </p>
+            </div>
+          )}
+
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Data">
               <input
@@ -397,7 +470,7 @@ export function AppointmentForm({
               Anuluj
             </button>
             <button type="submit" className={btnPrimary}>
-              Zapisz wizytę
+              {isEdit ? 'Zapisz zmiany' : 'Zapisz wizytę'}
             </button>
           </div>
         </form>

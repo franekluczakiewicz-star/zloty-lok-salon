@@ -9,19 +9,32 @@ import {
 import type {
   Appointment,
   Client,
+  DeletedAppointment,
   ServiceCatalogItem,
   ServiceRecord,
   StylistId,
 } from '../types'
-import { SERVICE_CATALOG, createId, normalizeCatalog, normalizePhone } from '../types'
+import { SERVICE_CATALOG, createId, isColoringService, normalizeCatalog, normalizePhone } from '../types'
 
 const STORAGE_KEY = 'zloty-lok-v8'
+const MAX_DELETED = 100
 
 type StoreData = {
   clients: Client[]
   appointments: Appointment[]
+  deletedAppointments: DeletedAppointment[]
   schedules: SchedulesMap
   catalog: ServiceCatalogItem[]
+}
+
+function normalizeDeleted(
+  items: DeletedAppointment[] | undefined,
+): DeletedAppointment[] {
+  if (!items?.length) return []
+  return items
+    .filter((a) => Boolean(a?.id) && Boolean(a?.deletedAt))
+    .sort((a, b) => b.deletedAt.localeCompare(a.deletedAt))
+    .slice(0, MAX_DELETED)
 }
 
 function loadStore(): StoreData {
@@ -35,6 +48,7 @@ function loadStore(): StoreData {
         appointments: (parsed.appointments ?? []).filter(
           (a) => Boolean(a.clientId) && Boolean(a.stylistId),
         ),
+        deletedAppointments: normalizeDeleted(parsed.deletedAppointments),
         schedules: {
           ania: normalizeSchedule(parsed.schedules?.ania ?? defaults.ania),
           ewa: normalizeSchedule(parsed.schedules?.ewa ?? defaults.ewa),
@@ -52,6 +66,7 @@ function loadStore(): StoreData {
   return {
     clients,
     appointments: createSeedAppointments(clients),
+    deletedAppointments: [],
     schedules: defaults,
     catalog: SERVICE_CATALOG.map((s) => ({ ...s })),
   }
@@ -63,15 +78,24 @@ export function useSalonStore() {
   const [appointments, setAppointments] = useState<Appointment[]>(
     data.appointments,
   )
+  const [deletedAppointments, setDeletedAppointments] = useState<
+    DeletedAppointment[]
+  >(data.deletedAppointments)
   const [schedules, setSchedules] = useState<SchedulesMap>(data.schedules)
   const [catalog, setCatalog] = useState<ServiceCatalogItem[]>(data.catalog)
 
   useEffect(() => {
     localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ clients, appointments, schedules, catalog }),
+      JSON.stringify({
+        clients,
+        appointments,
+        deletedAppointments,
+        schedules,
+        catalog,
+      }),
     )
-  }, [clients, appointments, schedules, catalog])
+  }, [clients, appointments, deletedAppointments, schedules, catalog])
 
   const addClient = useCallback(
     (data: Omit<Client, 'id' | 'services' | 'createdAt'>) => {
@@ -143,14 +167,56 @@ export function useSalonStore() {
   const updateAppointment = useCallback(
     (id: string, data: Partial<Omit<Appointment, 'id'>>) => {
       setAppointments((prev) =>
-        prev.map((a) => (a.id === id ? { ...a, ...data } : a)),
+        prev.map((a) => {
+          if (a.id !== id) return a
+          const next: Appointment = { ...a, ...data }
+          if (!isColoringService(next.serviceName, catalog)) {
+            delete next.dyeColor
+            delete next.dyeAmountG
+          }
+          return next
+        }),
       )
     },
-    [],
+    [catalog],
   )
 
   const deleteAppointment = useCallback((id: string) => {
-    setAppointments((prev) => prev.filter((a) => a.id !== id))
+    setAppointments((prev) => {
+      const found = prev.find((a) => a.id === id)
+      if (found) {
+        const entry: DeletedAppointment = {
+          ...found,
+          deletedAt: new Date().toISOString(),
+        }
+        setDeletedAppointments((trash) =>
+          [entry, ...trash.filter((t) => t.id !== id)].slice(0, MAX_DELETED),
+        )
+      }
+      return prev.filter((a) => a.id !== id)
+    })
+  }, [])
+
+  const restoreAppointment = useCallback((id: string) => {
+    setDeletedAppointments((trash) => {
+      const found = trash.find((a) => a.id === id)
+      if (found) {
+        const { deletedAt: _, ...appointment } = found
+        setAppointments((prev) => {
+          if (prev.some((a) => a.id === appointment.id)) return prev
+          return [...prev, appointment]
+        })
+      }
+      return trash.filter((a) => a.id !== id)
+    })
+  }, [])
+
+  const permanentlyDeleteAppointment = useCallback((id: string) => {
+    setDeletedAppointments((prev) => prev.filter((a) => a.id !== id))
+  }, [])
+
+  const clearDeletedAppointments = useCallback(() => {
+    setDeletedAppointments([])
   }, [])
 
   const updateSchedule = useCallback(
@@ -224,6 +290,7 @@ export function useSalonStore() {
   return {
     clients,
     appointments,
+    deletedAppointments,
     schedules,
     catalog,
     stats,
@@ -235,6 +302,9 @@ export function useSalonStore() {
     addAppointment,
     updateAppointment,
     deleteAppointment,
+    restoreAppointment,
+    permanentlyDeleteAppointment,
+    clearDeletedAppointments,
     updateSchedule,
     updateCatalogItem,
     resetCatalog,
