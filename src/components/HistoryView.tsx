@@ -63,8 +63,10 @@ export function HistoryView({ store }: HistoryViewProps) {
       apt,
     }))
     return [...live, ...deleted].sort((a, b) => {
-      const aKey = `${a.apt.date}${a.apt.time}${a.kind === 'deleted' ? a.apt.deletedAt : ''}`
-      const bKey = `${b.apt.date}${b.apt.time}${b.kind === 'deleted' ? b.apt.deletedAt : ''}`
+      const aDel = a.kind === 'deleted' ? a.apt.deletedAt : ''
+      const bDel = b.kind === 'deleted' ? b.apt.deletedAt : ''
+      const aKey = `${a.apt.date}${a.apt.time}${aDel}`
+      const bKey = `${b.apt.date}${b.apt.time}${bDel}`
       return bKey.localeCompare(aKey)
     })
   }, [store.appointments, store.deletedAppointments])
@@ -159,7 +161,7 @@ export function HistoryView({ store }: HistoryViewProps) {
             const noShow = row.kind === 'live' && apt.status === 'no_show'
             const key =
               row.kind === 'deleted'
-                ? `del-${apt.id}-${apt.deletedAt}`
+                ? `del-${row.apt.id}-${row.apt.deletedAt}`
                 : `live-${apt.id}`
 
             return (
@@ -195,7 +197,7 @@ export function HistoryView({ store }: HistoryViewProps) {
                   </p>
                   {row.kind === 'deleted' && (
                     <p className="mt-2 text-xs text-ink-muted">
-                      Usunięto: {formatDateTime(apt.deletedAt)}
+                      Usunięto: {formatDateTime(row.apt.deletedAt)}
                     </p>
                   )}
                 </div>
@@ -310,7 +312,7 @@ function HistoryDetailsModal({
         )}
         {row.kind === 'deleted' && (
           <p className="text-xs text-ink-muted">
-            Usunięto: {formatDateTime(apt.deletedAt)}
+            Usunięto: {formatDateTime(row.apt.deletedAt)}
           </p>
         )}
         {onRestore && (
