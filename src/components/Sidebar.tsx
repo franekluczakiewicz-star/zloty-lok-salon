@@ -33,6 +33,9 @@ export function Sidebar({ view, onNavigate, stats }: SidebarProps) {
               Złoty Lok
             </p>
             <p className="text-xs text-ink-muted">Salon fryzjerski</p>
+            <p className="mt-1 text-[10px] font-semibold tracking-wide text-leaf uppercase">
+              Wersja 15.09.2026
+            </p>
           </div>
         </div>
       </div>
