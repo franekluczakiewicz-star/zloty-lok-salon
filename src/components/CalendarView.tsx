@@ -1,6 +1,19 @@
-import { addDays, format, isToday, parseISO } from 'date-fns'
+import {
+  addDays,
+  addMonths,
+  eachDayOfInterval,
+  endOfMonth,
+  endOfWeek,
+  format,
+  isSameDay,
+  isSameMonth,
+  isToday,
+  parseISO,
+  startOfMonth,
+  startOfWeek,
+} from 'date-fns'
 import { pl } from 'date-fns/locale'
-import { Check, ChevronLeft, ChevronRight, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Pencil, Plus, Trash2, UserX, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { SalonStore } from '../hooks/useSalonStore'
 import {
@@ -12,15 +25,17 @@ import {
 } from '../schedule'
 import {
   STYLISTS,
+  APPOINTMENT_STATUS_LABEL,
   formatDyeAmount,
   formatPrice,
+  isAppointmentInactive,
   type Appointment,
   type AppointmentStatus,
   type Stylist,
   type StylistId,
 } from '../types'
 import { AppointmentForm } from './AppointmentForm'
-import { btnGhost, btnPrimary } from './ui'
+import { Modal, btnGhost, btnPrimary } from './ui'
 
 const DAY_START_H = 8
 const DAY_END_H = 20
@@ -47,10 +62,10 @@ export function CalendarView({
   onInitialClientConsumed,
 }: CalendarViewProps) {
   const [day, setDay] = useState(() => new Date())
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false)
   const [booking, setBooking] = useState<BookingState | null>(null)
   const [editingAptId, setEditingAptId] = useState<string | null>(null)
   const [selectedAptId, setSelectedAptId] = useState<string | null>(null)
-  const detailsRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!initialClientId) return
@@ -62,17 +77,12 @@ export function CalendarView({
     onInitialClientConsumed?.()
   }, [initialClientId, onInitialClientConsumed])
 
-  useEffect(() => {
-    if (!selectedAptId) return
-    detailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-  }, [selectedAptId])
-
   const dayKey = format(day, 'yyyy-MM-dd')
 
   const dayAppointments = useMemo(
     () =>
       store.appointments.filter(
-        (a) => a.date === dayKey && a.status !== 'cancelled',
+        (a) => a.date === dayKey && !isAppointmentInactive(a.status),
       ),
     [store.appointments, dayKey],
   )
@@ -136,7 +146,12 @@ export function CalendarView({
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
-            <div className="min-w-48 px-2 text-center">
+            <button
+              type="button"
+              className="min-w-48 rounded-xl px-2 py-1 text-center transition hover:bg-mist"
+              onClick={() => setMonthPickerOpen(true)}
+              aria-label="Wybierz datę z kalendarza miesięcznego"
+            >
               <p className="font-display text-lg font-semibold capitalize text-ink">
                 {format(day, 'EEEE', { locale: pl })}
               </p>
@@ -144,7 +159,10 @@ export function CalendarView({
                 {format(day, 'd MMMM yyyy', { locale: pl })}
                 {isToday(day) ? ' · dziś' : ''}
               </p>
-            </div>
+              <p className="mt-0.5 text-[10px] font-semibold tracking-wide text-forest uppercase">
+                Kalendarz miesiąca
+              </p>
+            </button>
             <button
               type="button"
               className={btnGhost}
@@ -163,6 +181,19 @@ export function CalendarView({
           </div>
         </div>
       </header>
+
+      {monthPickerOpen && (
+        <MonthPickerModal
+          selected={day}
+          appointments={store.appointments}
+          onClose={() => setMonthPickerOpen(false)}
+          onSelect={(d) => {
+            setDay(d)
+            setMonthPickerOpen(false)
+            setSelectedAptId(null)
+          }}
+        />
+      )}
 
       <div className="overflow-hidden rounded-3xl border border-line/80 bg-surface shadow-sm shadow-ink/5">
         <div className="grid grid-cols-[56px_repeat(3,minmax(0,1fr))] border-b border-line/70 bg-fog/60">
@@ -243,6 +274,36 @@ export function CalendarView({
                 appointments={byStylist[stylist.id]}
                 selectedAptId={selectedAptId}
                 onSelectApt={setSelectedAptId}
+                onEditApt={(id) => {
+                  setEditingAptId(id)
+                  setSelectedAptId(null)
+                }}
+                onStatus={(id, status) => {
+                  const apt = store.appointments.find((a) => a.id === id)
+                  store.updateAppointment(id, { status })
+                  if (status === 'done' && apt?.clientId) {
+                    store.addService(apt.clientId, {
+                      name: apt.serviceName,
+                      price: apt.price,
+                      durationMin: apt.durationMin,
+                      date: apt.date,
+                      notes: apt.notes,
+                    })
+                  }
+                  if (isAppointmentInactive(status)) {
+                    setSelectedAptId(null)
+                  }
+                }}
+                onDeleteApt={(id) => {
+                  if (
+                    confirm(
+                      'Usunąć wizytę? Możesz ją potem przywrócić w Historii.',
+                    )
+                  ) {
+                    store.deleteAppointment(id)
+                    setSelectedAptId(null)
+                  }
+                }}
                 onSlotClick={(time) => {
                   if (
                     !isSlotAvailable(
@@ -277,35 +338,33 @@ export function CalendarView({
       </div>
 
       {selectedApt && !editingApt && (
-        <div ref={detailsRef}>
-          <AppointmentDetails
-            appointment={selectedApt}
-            onClose={() => setSelectedAptId(null)}
-            onEdit={() => {
-              setEditingAptId(selectedApt.id)
+        <AppointmentDetailsModal
+          appointment={selectedApt}
+          onClose={() => setSelectedAptId(null)}
+          onEdit={() => {
+            setEditingAptId(selectedApt.id)
+            setSelectedAptId(null)
+          }}
+          onStatus={(status) => {
+            store.updateAppointment(selectedApt.id, { status })
+            if (status === 'done' && selectedApt.clientId) {
+              store.addService(selectedApt.clientId, {
+                name: selectedApt.serviceName,
+                price: selectedApt.price,
+                durationMin: selectedApt.durationMin,
+                date: selectedApt.date,
+                notes: selectedApt.notes,
+              })
+            }
+            if (isAppointmentInactive(status)) setSelectedAptId(null)
+          }}
+          onDelete={() => {
+            if (confirm('Usunąć wizytę? Możesz ją potem przywrócić w Historii.')) {
+              store.deleteAppointment(selectedApt.id)
               setSelectedAptId(null)
-            }}
-            onStatus={(status) => {
-              store.updateAppointment(selectedApt.id, { status })
-              if (status === 'done' && selectedApt.clientId) {
-                store.addService(selectedApt.clientId, {
-                  name: selectedApt.serviceName,
-                  price: selectedApt.price,
-                  durationMin: selectedApt.durationMin,
-                  date: selectedApt.date,
-                  notes: selectedApt.notes,
-                })
-              }
-              if (status === 'cancelled') setSelectedAptId(null)
-            }}
-            onDelete={() => {
-              if (confirm('Usunąć wizytę? Możesz ją potem przywrócić w Historii.')) {
-                store.deleteAppointment(selectedApt.id)
-                setSelectedAptId(null)
-              }
-            }}
-          />
-        </div>
+            }
+          }}
+        />
       )}
 
       {booking && (
@@ -339,14 +398,147 @@ export function CalendarView({
           onAddClient={store.addClient}
           onClose={() => setEditingAptId(null)}
           onSave={(data) => {
+            const wasDone = editingApt.status === 'done'
             store.updateAppointment(editingApt.id, data)
+            if (data.status === 'done' && !wasDone && data.clientId) {
+              store.addService(data.clientId, {
+                name: data.serviceName,
+                price: data.price,
+                durationMin: data.durationMin,
+                date: data.date,
+                notes: data.notes,
+              })
+            }
             setDay(parseISO(data.date))
             setEditingAptId(null)
-            setSelectedAptId(editingApt.id)
+            if (!isAppointmentInactive(data.status)) {
+              setSelectedAptId(editingApt.id)
+            }
           }}
         />
       )}
     </div>
+  )
+}
+
+function MonthPickerModal({
+  selected,
+  appointments,
+  onClose,
+  onSelect,
+}: {
+  selected: Date
+  appointments: Appointment[]
+  onClose: () => void
+  onSelect: (day: Date) => void
+}) {
+  const [cursor, setCursor] = useState(() => startOfMonth(selected))
+
+  const days = useMemo(() => {
+    const start = startOfWeek(startOfMonth(cursor), { weekStartsOn: 1 })
+    const end = endOfWeek(endOfMonth(cursor), { weekStartsOn: 1 })
+    return eachDayOfInterval({ start, end })
+  }, [cursor])
+
+  const busyDays = useMemo(() => {
+    const set = new Set<string>()
+    for (const a of appointments) {
+      if (a.status === 'cancelled') continue
+      set.add(a.date)
+    }
+    return set
+  }, [appointments])
+
+  const weekdays = ['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'So', 'Nd']
+
+  return (
+    <Modal title="Wybierz dzień" onClose={onClose}>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            className={btnGhost}
+            aria-label="Poprzedni miesiąc"
+            onClick={() => setCursor((d) => addMonths(d, -1))}
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <p className="font-display text-xl font-semibold capitalize text-ink">
+            {format(cursor, 'LLLL yyyy', { locale: pl })}
+          </p>
+          <button
+            type="button"
+            className={btnGhost}
+            aria-label="Następny miesiąc"
+            onClick={() => setCursor((d) => addMonths(d, 1))}
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-7 gap-1 text-center">
+          {weekdays.map((label) => (
+            <div
+              key={label}
+              className="py-1 text-[11px] font-semibold tracking-wide text-ink-muted uppercase"
+            >
+              {label}
+            </div>
+          ))}
+          {days.map((d) => {
+            const inMonth = isSameMonth(d, cursor)
+            const selectedDay = isSameDay(d, selected)
+            const today = isToday(d)
+            const key = format(d, 'yyyy-MM-dd')
+            const hasVisits = busyDays.has(key)
+
+            return (
+              <button
+                key={key}
+                type="button"
+                disabled={!inMonth}
+                onClick={() => inMonth && onSelect(d)}
+                className={`relative flex aspect-square flex-col items-center justify-center rounded-xl text-sm font-semibold transition ${
+                  !inMonth
+                    ? 'cursor-default text-ink-muted/25'
+                    : selectedDay
+                      ? 'bg-forest text-sand shadow-md shadow-forest/25'
+                      : today
+                        ? 'bg-mist text-forest ring-1 ring-forest/30 hover:bg-forest hover:text-sand'
+                        : 'text-ink hover:bg-mist'
+                }`}
+              >
+                {format(d, 'd')}
+                {hasVisits && inMonth && (
+                  <span
+                    className={`absolute bottom-1 h-1 w-1 rounded-full ${
+                      selectedDay ? 'bg-sand' : 'bg-forest'
+                    }`}
+                  />
+                )}
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="flex items-center justify-between gap-3 border-t border-line/60 pt-3">
+          <p className="text-xs text-ink-muted">
+            Kropka = dzień z wizytami
+          </p>
+          <button
+            type="button"
+            className={btnGhost}
+            onClick={() => {
+              const now = new Date()
+              setCursor(startOfMonth(now))
+              onSelect(now)
+            }}
+          >
+            Przejdź do dziś
+          </button>
+        </div>
+      </div>
+    </Modal>
   )
 }
 
@@ -357,6 +549,9 @@ function DayColumn({
   appointments,
   selectedAptId,
   onSelectApt,
+  onEditApt,
+  onStatus,
+  onDeleteApt,
   onSlotClick,
 }: {
   stylist: Stylist
@@ -365,10 +560,36 @@ function DayColumn({
   appointments: Appointment[]
   selectedAptId: string | null
   onSelectApt: (id: string) => void
+  onEditApt: (id: string) => void
+  onStatus: (id: string, status: AppointmentStatus) => void
+  onDeleteApt: (id: string) => void
   onSlotClick: (time: string) => void
 }) {
   const offBlocks = unavailableBlocks(schedule, dayKey, DAY_START_H, DAY_END_H)
   const avail = getAvailabilityForDate(schedule, dayKey)
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function openHover(id: string) {
+    if (hideTimer.current) clearTimeout(hideTimer.current)
+    setHoveredId(id)
+  }
+
+  function scheduleHide() {
+    if (hideTimer.current) clearTimeout(hideTimer.current)
+    hideTimer.current = setTimeout(() => setHoveredId(null), 180)
+  }
+
+  useEffect(() => {
+    return () => {
+      if (hideTimer.current) clearTimeout(hideTimer.current)
+    }
+  }, [])
+
+  const layout = useMemo(
+    () => layoutOverlappingAppointments(appointments),
+    [appointments],
+  )
 
   return (
     <div className="relative border-r border-line/50 last:border-r-0">
@@ -419,47 +640,234 @@ function DayColumn({
         const end = clampMinutes(start + apt.durationMin)
         const top = (start / 60) * HOUR_PX
         const height = Math.max(((end - start) / 60) * HOUR_PX, 28)
-        const active = selectedAptId === apt.id
+        const active = selectedAptId === apt.id || hoveredId === apt.id
         const done = apt.status === 'done'
+        const noShow = apt.status === 'no_show'
+        const showAbove = top > GRID_HEIGHT * 0.45
+        const place = layout.get(apt.id) ?? { col: 0, cols: 1 }
+        const widthPct = 100 / place.cols
+        const leftPct = (place.col / place.cols) * 100
 
         return (
-          <button
+          <div
             key={apt.id}
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              onSelectApt(apt.id)
-            }}
-            className={`absolute right-1 left-1 z-10 overflow-hidden rounded-lg border px-2 py-1 text-left shadow-sm transition ${
-              active ? 'ring-2 ring-forest/40' : ''
-            } ${done ? 'opacity-70' : ''}`}
+            className="absolute z-10"
             style={{
               top,
               height,
-              backgroundColor: hexWithAlpha(stylist.color, done ? 0.35 : 0.88),
-              borderColor: stylist.color,
-              color: done ? '#1a2421' : '#fff',
+              left: `calc(${leftPct}% + 2px)`,
+              width: `calc(${widthPct}% - 4px)`,
             }}
+            onMouseEnter={() => openHover(apt.id)}
+            onMouseLeave={scheduleHide}
           >
-            <p className="truncate text-[11px] font-bold leading-tight">
-              {apt.time} · {apt.durationMin} min
-            </p>
-            <p className="truncate text-xs font-semibold leading-tight">
-              {apt.personName}
-            </p>
-            {height > 44 && (
-              <p className="truncate text-[11px] leading-tight opacity-90">
-                {apt.serviceName}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onSelectApt(apt.id)
+              }}
+              className={`relative h-full w-full overflow-hidden rounded-lg border px-1.5 py-1 text-left shadow-sm transition sm:px-2 ${
+                active ? 'ring-2 ring-forest/40' : ''
+              } ${done ? 'opacity-75 line-through decoration-2' : ''} ${
+                noShow ? 'ring-1 ring-blush/50' : ''
+              }`}
+              style={{
+                backgroundColor: hexWithAlpha(
+                  noShow ? '#c45c5c' : stylist.color,
+                  done ? 0.32 : noShow ? 0.2 : 0.88,
+                ),
+                borderColor: noShow ? '#c45c5c' : stylist.color,
+                color: done || noShow ? '#1a2421' : '#fff',
+              }}
+            >
+              <p className="truncate text-[11px] font-bold leading-tight">
+                {apt.time} · {apt.durationMin} min
               </p>
+              <p className="truncate text-xs font-semibold leading-tight">
+                {apt.personName}
+              </p>
+              {height > 44 && (
+                <p className="truncate text-[11px] leading-tight opacity-90">
+                  {apt.serviceName}
+                </p>
+              )}
+              {noShow && (
+                <span
+                  className="pointer-events-none absolute inset-0 flex items-center justify-center"
+                  aria-hidden
+                >
+                  <X
+                    className="h-[70%] w-[70%] max-h-14 max-w-14 text-[#c0392b] drop-shadow-sm"
+                    strokeWidth={3.5}
+                  />
+                </span>
+              )}
+            </button>
+
+            {hoveredId === apt.id && (
+              <AppointmentHoverCard
+                appointment={apt}
+                stylistName={stylist.name}
+                placeAbove={showAbove}
+                onMouseEnter={() => openHover(apt.id)}
+                onMouseLeave={scheduleHide}
+                onEdit={() => onEditApt(apt.id)}
+                onStatus={(status) => onStatus(apt.id, status)}
+                onDelete={() => onDeleteApt(apt.id)}
+              />
             )}
-          </button>
+          </div>
         )
       })}
     </div>
   )
 }
 
-function AppointmentDetails({
+function StatusActions({
+  current,
+  onStatus,
+  onEdit,
+  onDelete,
+  compact,
+}: {
+  current: AppointmentStatus
+  onStatus: (status: AppointmentStatus) => void
+  onEdit?: () => void
+  onDelete: () => void
+  compact?: boolean
+}) {
+  const btn = compact
+    ? 'inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs font-semibold transition'
+    : 'inline-flex items-center gap-1.5 rounded-xl border px-4 py-2 text-sm font-semibold transition'
+
+  function statusBtn(status: AppointmentStatus, label: string, icon: React.ReactNode) {
+    const active = current === status
+    return (
+      <button
+        type="button"
+        className={`${btn} ${
+          active
+            ? 'border-forest bg-mist text-forest ring-2 ring-forest/20'
+            : 'border-line text-ink-muted hover:bg-mist hover:text-ink'
+        }`}
+        onClick={() => onStatus(status)}
+      >
+        {icon}
+        {label}
+      </button>
+    )
+  }
+
+  return (
+    <div className={`flex flex-col gap-1.5 ${compact ? '' : 'sm:flex-row sm:flex-wrap'}`}>
+      {statusBtn(
+        'done',
+        'Wizyta zakończona',
+        <Check className={compact ? 'h-3.5 w-3.5 shrink-0' : 'h-4 w-4'} />,
+      )}
+      {statusBtn(
+        'cancelled',
+        'Anulowana',
+        <X className={compact ? 'h-3.5 w-3.5 shrink-0' : 'h-4 w-4'} />,
+      )}
+      {statusBtn(
+        'no_show',
+        'Klient nie przyszedł',
+        <UserX className={compact ? 'h-3.5 w-3.5 shrink-0' : 'h-4 w-4'} />,
+      )}
+      {statusBtn(
+        'planned',
+        'Zaplanowana',
+        <Plus className={compact ? 'h-3.5 w-3.5 shrink-0' : 'h-4 w-4'} />,
+      )}
+      {onEdit && (
+        <button
+          type="button"
+          className={`${btn} border-line text-ink hover:bg-mist`}
+          onClick={onEdit}
+        >
+          <Pencil className={compact ? 'h-3.5 w-3.5 shrink-0' : 'h-4 w-4'} />
+          Edytuj
+        </button>
+      )}
+      <button
+        type="button"
+        className={`${btn} border-blush/40 bg-blush/10 text-blush hover:bg-blush/20`}
+        onClick={onDelete}
+      >
+        <Trash2 className={compact ? 'h-3.5 w-3.5 shrink-0' : 'h-4 w-4'} />
+        Usuń wizytę
+      </button>
+    </div>
+  )
+}
+
+function AppointmentHoverCard({
+  appointment,
+  stylistName,
+  placeAbove,
+  onMouseEnter,
+  onMouseLeave,
+  onEdit,
+  onStatus,
+  onDelete,
+}: {
+  appointment: Appointment
+  stylistName: string
+  placeAbove: boolean
+  onMouseEnter: () => void
+  onMouseLeave: () => void
+  onEdit: () => void
+  onStatus: (status: AppointmentStatus) => void
+  onDelete: () => void
+}) {
+  return (
+    <div
+      className={`absolute left-1/2 z-50 w-[min(18rem,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border border-line bg-surface p-3 text-ink shadow-xl shadow-ink/15 ${
+        placeAbove ? 'bottom-[calc(100%+6px)]' : 'top-[calc(100%+6px)]'
+      }`}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      role="dialog"
+      aria-label="Szczegóły wizyty"
+    >
+      <p className="text-[10px] font-semibold tracking-widest text-ink-muted uppercase">
+        {APPOINTMENT_STATUS_LABEL[appointment.status]}
+      </p>
+      <p className="mt-0.5 font-display text-lg font-semibold leading-tight">
+        {appointment.personName}
+      </p>
+      <p className="mt-1 text-xs text-ink-muted">
+        {appointment.time} · {appointment.durationMin} min · {stylistName}
+      </p>
+      <p className="text-xs text-ink">{appointment.serviceName}</p>
+      <p className="mt-1 text-sm font-semibold text-forest">
+        {formatPrice(appointment.price)}
+      </p>
+      {(appointment.dyeColor || appointment.dyeAmountG) && (
+        <p className="mt-1 text-xs text-ink-muted">
+          Farba: {appointment.dyeColor || '—'}
+          {appointment.dyeAmountG != null
+            ? ` · ${formatDyeAmount(appointment.dyeAmountG)}`
+            : ''}
+        </p>
+      )}
+
+      <div className="mt-3">
+        <StatusActions
+          current={appointment.status}
+          onStatus={onStatus}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          compact
+        />
+      </div>
+    </div>
+  )
+}
+
+function AppointmentDetailsModal({
   appointment,
   onClose,
   onEdit,
@@ -473,23 +881,17 @@ function AppointmentDetails({
   onDelete: () => void
 }) {
   const stylist = STYLISTS.find((s) => s.id === appointment.stylistId)
-  const statusLabel =
-    appointment.status === 'done'
-      ? 'Wykonana'
-      : appointment.status === 'cancelled'
-        ? 'Anulowana'
-        : 'Zaplanowana'
 
   return (
-    <div className="animate-fade-up rounded-3xl border border-line/80 bg-surface p-5 shadow-sm shadow-ink/5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <Modal title="Szczegóły wizyty" onClose={onClose}>
+      <div className="space-y-4">
         <div>
           <p className="text-xs font-semibold tracking-widest text-ink-muted uppercase">
-            Szczegóły wizyty · {statusLabel}
+            {APPOINTMENT_STATUS_LABEL[appointment.status]}
           </p>
-          <h2 className="mt-1 font-display text-2xl font-semibold text-ink">
+          <h3 className="mt-1 font-display text-2xl font-semibold text-ink">
             {appointment.personName}
-          </h2>
+          </h3>
           <p className="mt-1 text-sm text-ink-muted">
             {appointment.time} · {appointment.durationMin} min ·{' '}
             {appointment.serviceName}
@@ -500,7 +902,8 @@ function AppointmentDetails({
           </p>
           {(appointment.dyeColor || appointment.dyeAmountG) && (
             <p className="mt-2 text-sm text-ink">
-              Farba: <span className="font-semibold">{appointment.dyeColor || '—'}</span>
+              Farba:{' '}
+              <span className="font-semibold">{appointment.dyeColor || '—'}</span>
               {appointment.dyeAmountG != null && (
                 <span className="text-ink-muted">
                   {' '}
@@ -510,50 +913,20 @@ function AppointmentDetails({
             </p>
           )}
         </div>
-        <button type="button" className={btnGhost} onClick={onClose}>
-          Zamknij
-        </button>
-      </div>
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          className="inline-flex items-center gap-1.5 rounded-xl border border-line px-4 py-2 text-sm font-semibold text-ink transition hover:bg-mist"
-          onClick={onEdit}
-        >
-          <Pencil className="h-4 w-4" />
-          Edytuj
-        </button>
-        {appointment.status === 'planned' && (
-          <>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 rounded-xl bg-mist px-4 py-2 text-sm font-semibold text-forest transition hover:bg-forest hover:text-sand"
-              onClick={() => onStatus('done')}
-            >
-              <Check className="h-4 w-4" />
-              Wykonana
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-line px-4 py-2 text-sm font-semibold text-ink-muted transition hover:bg-mist"
-              onClick={() => onStatus('cancelled')}
-            >
-              <X className="h-4 w-4" />
-              Anuluj
-            </button>
-          </>
-        )}
-        <button
-          type="button"
-          className="inline-flex items-center gap-1.5 rounded-xl border border-blush/40 bg-blush/10 px-4 py-2 text-sm font-semibold text-blush transition hover:bg-blush/20"
-          onClick={onDelete}
-        >
-          <Trash2 className="h-4 w-4" />
-          Usuń wizytę
-        </button>
+        <div>
+          <p className="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase">
+            Status wizyty
+          </p>
+          <StatusActions
+            current={appointment.status}
+            onStatus={onStatus}
+            onEdit={onEdit}
+            onDelete={onDelete}
+          />
+        </div>
       </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -588,9 +961,50 @@ function clampMinutes(value: number) {
   return Math.max(0, Math.min(DAY_MINUTES, value))
 }
 
+/** Układ nachodzących wizyt obok siebie (jak w Outlooku). */
+function layoutOverlappingAppointments(appointments: Appointment[]) {
+  const sorted = [...appointments]
+    .filter((a) => a.status !== 'cancelled')
+    .map((apt) => {
+      const start = timeToMinutes(apt.time)
+      return { apt, start, end: start + apt.durationMin }
+    })
+    .sort((a, b) => a.start - b.start || b.end - a.end)
+
+  type Placed = { id: string; start: number; end: number; col: number }
+  const placed: Placed[] = []
+
+  for (const item of sorted) {
+    let col = 0
+    while (
+      placed.some(
+        (p) => p.col === col && p.start < item.end && p.end > item.start,
+      )
+    ) {
+      col += 1
+    }
+    placed.push({
+      id: item.apt.id,
+      start: item.start,
+      end: item.end,
+      col,
+    })
+  }
+
+  const result = new Map<string, { col: number; cols: number }>()
+  for (const item of placed) {
+    const group = placed.filter(
+      (p) => p.start < item.end && p.end > item.start,
+    )
+    const cols = Math.max(...group.map((g) => g.col)) + 1
+    result.set(item.id, { col: item.col, cols })
+  }
+  return result
+}
+
 function busyMinutes(appointments: Appointment[]) {
   return appointments
-    .filter((a) => a.status !== 'cancelled')
+    .filter((a) => !isAppointmentInactive(a.status))
     .reduce((sum, a) => {
       const start = Math.max(timeToMinutes(a.time), DAY_START_H * 60)
       const end = Math.min(start + a.durationMin, DAY_END_H * 60)

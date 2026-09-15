@@ -1,5 +1,5 @@
-import { Plus, Search } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { Plus, Search, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   getAvailabilityForDate,
   isSlotAvailable,
@@ -7,11 +7,13 @@ import {
 } from '../schedule'
 import {
   STYLISTS,
+  APPOINTMENT_STATUS_LABEL,
   clientFullName,
   defaultDyeAmountG,
   formatPhone,
   isColoringService,
   type Appointment,
+  type AppointmentStatus,
   type Client,
   type ServiceCatalogItem,
   type StylistId,
@@ -57,14 +59,21 @@ export function AppointmentForm({
   onSave,
 }: AppointmentFormProps) {
   const isEdit = Boolean(appointment)
+  const initialClient =
+    clients.find(
+      (c) => c.id === (appointment?.clientId ?? initialClientId ?? ''),
+    ) ?? null
   const [stylistId, setStylistId] = useState<StylistId | null>(
     appointment?.stylistId ?? initialStylistId ?? null,
   )
-  const [clientId, setClientId] = useState(
-    appointment?.clientId ?? initialClientId ?? '',
+  const [clientId, setClientId] = useState(initialClient?.id ?? '')
+  const [clientQuery, setClientQuery] = useState(
+    initialClient ? clientFullName(initialClient) : '',
   )
-  const [clientQuery, setClientQuery] = useState('')
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [highlightIndex, setHighlightIndex] = useState(0)
   const [showNewClient, setShowNewClient] = useState(false)
+  const clientBoxRef = useRef<HTMLDivElement>(null)
   const [serviceName, setServiceName] = useState<string>(
     appointment?.serviceName ?? catalog[0]?.name ?? '',
   )
@@ -89,6 +98,9 @@ export function AppointmentForm({
     appointment?.time ?? initialTime ?? '10:00',
   )
   const [notes, setNotes] = useState(appointment?.notes ?? '')
+  const [status, setStatus] = useState<AppointmentStatus>(
+    appointment?.status ?? 'planned',
+  )
   const [error, setError] = useState('')
 
   const isColoring = isColoringService(serviceName, catalog)
@@ -125,32 +137,66 @@ export function AppointmentForm({
     )
   }, [schedules, stylistId, date, time, durationMin])
 
-  const overlap = useMemo(() => {
-    if (!stylistId || !time) return false
+  const overlappingApts = useMemo(() => {
+    if (!stylistId || !time) return []
     const start = toMin(time)
     const end = start + Number(durationMin || 0)
-    return dayBusy.some((a) => {
+    return dayBusy.filter((a) => {
       const aStart = toMin(a.time)
       const aEnd = aStart + a.durationMin
       return start < aEnd && end > aStart
     })
   }, [dayBusy, stylistId, time, durationMin])
 
-  const filteredClients = useMemo(() => {
+  const overlap = overlappingApts.length > 0
+
+  const suggestions = useMemo(() => {
     const q = clientQuery.trim().toLowerCase()
     const digits = clientQuery.replace(/\D/g, '')
-    if (!q) return clients
-    return clients.filter((c) => {
-      const name = clientFullName(c).toLowerCase()
-      const phone = c.phone.replace(/\D/g, '')
-      return (
-        name.includes(q) ||
-        c.firstName.toLowerCase().includes(q) ||
-        c.lastName.toLowerCase().includes(q) ||
-        (digits.length > 0 && phone.includes(digits))
-      )
-    })
-  }, [clients, clientQuery])
+    if (q.length < 1) return []
+    return clients
+      .filter((c) => {
+        if (c.id === clientId && clientFullName(c).toLowerCase() === q) {
+          return false
+        }
+        const name = clientFullName(c).toLowerCase()
+        const phone = c.phone.replace(/\D/g, '')
+        return (
+          name.includes(q) ||
+          c.firstName.toLowerCase().includes(q) ||
+          c.lastName.toLowerCase().includes(q) ||
+          (digits.length >= 2 && phone.includes(digits))
+        )
+      })
+      .slice(0, 8)
+  }, [clients, clientQuery, clientId])
+
+  useEffect(() => {
+    setHighlightIndex(0)
+  }, [clientQuery])
+
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (!clientBoxRef.current?.contains(e.target as Node)) {
+        setShowSuggestions(false)
+      }
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [])
+
+  function pickClient(client: Client) {
+    setClientId(client.id)
+    setClientQuery(clientFullName(client))
+    setShowSuggestions(false)
+    setError('')
+  }
+
+  function clearClient() {
+    setClientId('')
+    setClientQuery('')
+    setShowSuggestions(false)
+  }
 
   function applyCatalog(name: string) {
     const item = catalog.find((s) => s.name === name)
@@ -177,7 +223,7 @@ export function AppointmentForm({
       return
     }
     if (!clientId || !selectedClient) {
-      setError('Wybierz klienta z bazy albo dodaj nowego.')
+      setError('Wybierz klienta z podpowiedzi albo dodaj nowego.')
       return
     }
     if (!serviceName.trim() || !date || !time) {
@@ -206,9 +252,17 @@ export function AppointmentForm({
       )
       return
     }
-    if (overlap) {
-      setError('Ten termin koliduje z inną wizytą fryzjerki.')
-      return
+    if (overlappingApts.length > 0) {
+      const list = overlappingApts
+        .map(
+          (a) =>
+            `• ${a.time} · ${a.personName} — ${a.serviceName} (${a.durationMin} min)`,
+        )
+        .join('\n')
+      const ok = confirm(
+        `Ten termin jest zajęty.\n\nIstniejące usługi:\n${list}\n\nCzy na pewno dodać tę usługę równolegle (jak w Outlooku)?`,
+      )
+      if (!ok) return
     }
     onSave({
       stylistId,
@@ -219,7 +273,7 @@ export function AppointmentForm({
       time,
       durationMin: durationNum,
       price: priceNum,
-      status: appointment?.status ?? 'planned',
+      status: isEdit ? status : 'planned',
       notes: notes.trim() || undefined,
       dyeColor: isColoring ? dyeColor.trim() : undefined,
       dyeAmountG: isColoring ? dyeAmountNum : undefined,
@@ -276,91 +330,107 @@ export function AppointmentForm({
               </button>
             </div>
 
-            {selectedClient ? (
-              <div className="flex items-center justify-between gap-3 rounded-2xl border border-forest/30 bg-mist px-4 py-3">
-                <div>
-                  <p className="font-semibold text-ink">
-                    {clientFullName(selectedClient)}
-                  </p>
-                  <p className="text-sm text-ink-muted">
-                    {formatPhone(selectedClient.phone)}
-                  </p>
-                </div>
+            <div ref={clientBoxRef} className="relative">
+              <Search className="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+              <input
+                className={`${inputClass} pl-11 ${selectedClient ? 'pr-11' : ''}`}
+                value={clientQuery}
+                onChange={(e) => {
+                  const value = e.target.value
+                  setClientQuery(value)
+                  setClientId('')
+                  setShowSuggestions(true)
+                }}
+                onFocus={() => {
+                  if (clientQuery.trim().length >= 1) setShowSuggestions(true)
+                }}
+                onKeyDown={(e) => {
+                  if (!showSuggestions || suggestions.length === 0) {
+                    if (e.key === 'Escape') setShowSuggestions(false)
+                    return
+                  }
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault()
+                    setHighlightIndex((i) =>
+                      Math.min(i + 1, suggestions.length - 1),
+                    )
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault()
+                    setHighlightIndex((i) => Math.max(i - 1, 0))
+                  } else if (e.key === 'Enter') {
+                    e.preventDefault()
+                    const pick = suggestions[highlightIndex]
+                    if (pick) pickClient(pick)
+                  } else if (e.key === 'Escape') {
+                    setShowSuggestions(false)
+                  }
+                }}
+                placeholder="Zacznij wpisywać imię, nazwisko lub telefon…"
+                autoComplete="off"
+                role="combobox"
+                aria-expanded={showSuggestions && suggestions.length > 0}
+                aria-autocomplete="list"
+              />
+              {(clientQuery || selectedClient) && (
                 <button
                   type="button"
-                  className="text-sm font-medium text-ink-muted hover:text-ink"
-                  onClick={() => setClientId('')}
+                  className="absolute top-1/2 right-3 -translate-y-1/2 rounded-full p-1 text-ink-muted hover:bg-mist hover:text-ink"
+                  aria-label="Wyczyść klienta"
+                  onClick={clearClient}
                 >
-                  Zmień
+                  <X className="h-4 w-4" />
                 </button>
-              </div>
-            ) : (
-              <>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-ink-muted" />
-                  <input
-                    className={`${inputClass} pl-11`}
-                    value={clientQuery}
-                    onChange={(e) => setClientQuery(e.target.value)}
-                    placeholder="Szukaj po imieniu lub telefonie…"
-                  />
-                </div>
+              )}
 
-                {clients.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-line bg-fog/50 px-4 py-6 text-center">
-                    <p className="text-sm font-medium text-ink">
-                      Brak klientów w bazie
-                    </p>
-                    <p className="mt-1 text-xs text-ink-muted">
-                      Dodaj nowego klienta tutaj albo w zakładce Klienci.
-                    </p>
-                    <button
-                      type="button"
-                      className={`${btnPrimary} mt-3 text-xs`}
-                      onClick={() => setShowNewClient(true)}
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      Dodaj klienta
-                    </button>
-                  </div>
-                ) : filteredClients.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-line bg-fog/50 px-4 py-5 text-center">
-                    <p className="text-sm text-ink-muted">
-                      Nic nie znaleziono — dodaj nowego klienta.
-                    </p>
-                    <button
-                      type="button"
-                      className={`${btnSecondary} mt-3 text-xs`}
-                      onClick={() => setShowNewClient(true)}
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      Nowy klient
-                    </button>
-                  </div>
-                ) : (
-                  <ul className="scroll-nice max-h-44 overflow-y-auto rounded-2xl border border-line">
-                    {filteredClients.map((client) => (
-                      <li key={client.id} className="border-b border-line/60 last:border-0">
-                        <button
-                          type="button"
-                          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-mist"
-                          onClick={() => {
-                            setClientId(client.id)
-                            setError('')
-                          }}
-                        >
-                          <span className="font-semibold text-ink">
-                            {clientFullName(client)}
-                          </span>
-                          <span className="text-sm text-ink-muted">
-                            {formatPhone(client.phone)}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </>
+              {showSuggestions && clientQuery.trim().length >= 1 && (
+                <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-2xl border border-line bg-surface shadow-lg shadow-ink/10">
+                  {suggestions.length > 0 ? (
+                    <ul className="max-h-56 overflow-y-auto py-1" role="listbox">
+                      {suggestions.map((client, index) => (
+                        <li key={client.id} role="option" aria-selected={index === highlightIndex}>
+                          <button
+                            type="button"
+                            className={`flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition ${
+                              index === highlightIndex ? 'bg-mist' : 'hover:bg-fog'
+                            }`}
+                            onMouseEnter={() => setHighlightIndex(index)}
+                            onClick={() => pickClient(client)}
+                          >
+                            <span className="font-semibold text-ink">
+                              {clientFullName(client)}
+                            </span>
+                            <span className="text-sm text-ink-muted">
+                              {formatPhone(client.phone)}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="px-4 py-3 text-sm text-ink-muted">
+                      Brak podpowiedzi — dodaj nowego klienta.
+                      <button
+                        type="button"
+                        className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-forest hover:underline"
+                        onClick={() => {
+                          setShowSuggestions(false)
+                          setShowNewClient(true)
+                        }}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Nowy klient
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {selectedClient && (
+              <p className="text-xs text-ink-muted">
+                Wybrano: {clientFullName(selectedClient)} ·{' '}
+                {formatPhone(selectedClient.phone)}
+              </p>
             )}
           </div>
 
@@ -442,6 +512,37 @@ export function AppointmentForm({
             </Field>
           </div>
 
+          {isEdit && (
+            <Field label="Status wizyty">
+              <div className="grid grid-cols-2 gap-2">
+                {(
+                  [
+                    'planned',
+                    'done',
+                    'cancelled',
+                    'no_show',
+                  ] as AppointmentStatus[]
+                ).map((s) => {
+                  const active = status === s
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setStatus(s)}
+                      className={`rounded-2xl border px-3 py-2.5 text-left text-sm font-semibold transition ${
+                        active
+                          ? 'border-forest bg-mist text-forest ring-2 ring-forest/20'
+                          : 'border-line bg-fog text-ink-muted hover:bg-surface hover:text-ink'
+                      }`}
+                    >
+                      {APPOINTMENT_STATUS_LABEL[s]}
+                    </button>
+                  )
+                })}
+              </div>
+            </Field>
+          )}
+
           {selectedStylist && (
             <DayTimelinePreview
               stylistName={selectedStylist.name}
@@ -449,7 +550,8 @@ export function AppointmentForm({
               busy={dayBusy}
               draftStart={time}
               draftDuration={Number(durationMin) || 0}
-              overlap={overlap || outsideSchedule}
+              overlap={outsideSchedule}
+              parallel={overlap}
               availability={dayAvail}
             />
           )}
@@ -462,6 +564,23 @@ export function AppointmentForm({
               placeholder="Uwagi do wizyty…"
             />
           </Field>
+
+          {overlap && (
+            <div className="rounded-2xl border border-sand/70 bg-sand/30 px-4 py-3 text-sm text-ink">
+              <p className="font-semibold text-ink">Termin zajęty</p>
+              <ul className="mt-2 space-y-1 text-ink-muted">
+                {overlappingApts.map((a) => (
+                  <li key={a.id}>
+                    {a.time} · {a.personName} — {a.serviceName}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs text-ink-muted">
+                Możesz dodać kolejną usługę równolegle — po zapisie potwierdzisz
+                wybór. W kalendarzu wizyty ustawią się obok siebie jak w Outlooku.
+              </p>
+            </div>
+          )}
 
           {error && <p className="text-sm text-blush">{error}</p>}
 
@@ -483,7 +602,7 @@ export function AppointmentForm({
           onSave={(data) => {
             const client = onAddClient(data)
             setClientId(client.id)
-            setClientQuery('')
+            setClientQuery(clientFullName(client))
             setShowNewClient(false)
             setError('')
           }}
@@ -509,6 +628,7 @@ function DayTimelinePreview({
   draftStart,
   draftDuration,
   overlap,
+  parallel,
   availability,
 }: {
   stylistName: string
@@ -517,6 +637,7 @@ function DayTimelinePreview({
   draftStart: string
   draftDuration: number
   overlap: boolean
+  parallel?: boolean
   availability: { enabled: boolean; start: string; end: string } | null
 }) {
   const total = (PREVIEW_END - PREVIEW_START) * 60
@@ -528,10 +649,12 @@ function DayTimelinePreview({
     : !availability.enabled
       ? 'Dzień wolny w grafiku'
       : overlap
-        ? 'Kolizja / poza grafikiem'
-        : busy.length === 0
-          ? `Grafik ${availability.start}–${availability.end}`
-          : `${busy.length} wizyt · grafik ${availability.start}–${availability.end}`
+        ? 'Poza grafikiem'
+        : parallel
+          ? 'Termin zajęty — możliwa wizyta równoległa'
+          : busy.length === 0
+            ? `Grafik ${availability.start}–${availability.end}`
+            : `${busy.length} wizyt · grafik ${availability.start}–${availability.end}`
 
   return (
     <div className="rounded-2xl border border-line bg-fog/40 p-3">
@@ -543,7 +666,9 @@ function DayTimelinePreview({
           className={`text-[11px] font-semibold ${
             overlap || (availability && !availability.enabled)
               ? 'text-blush'
-              : 'text-ink-muted'
+              : parallel
+                ? 'text-sand-deep'
+                : 'text-ink-muted'
           }`}
         >
           {statusText}
@@ -596,7 +721,9 @@ function DayTimelinePreview({
             className={`absolute right-1 left-1 rounded-md border-2 border-dashed ${
               overlap
                 ? 'border-blush bg-blush/25'
-                : 'border-forest bg-forest/20'
+                : parallel
+                  ? 'border-sand-deep bg-sand/40'
+                  : 'border-forest bg-forest/20'
             }`}
             style={{
               top: `${(Math.max(0, draftFrom) / total) * 100}%`,

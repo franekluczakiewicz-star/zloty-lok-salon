@@ -72,6 +72,7 @@ export function DyeReportView({ store }: DyeReportViewProps) {
       store.appointments.filter(
         (a) =>
           a.status !== 'cancelled' &&
+          a.status !== 'no_show' &&
           isColoringService(a.serviceName, store.catalog) &&
           Boolean(a.dyeColor?.trim() || (a.dyeAmountG && a.dyeAmountG > 0)),
       ),

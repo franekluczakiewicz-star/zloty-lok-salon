@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { createSeedAppointments, seedClients } from '../data/seed'
+import { createSeedAppointments, mergeSeedClients, seedClients } from '../data/seed'
 import {
   createDefaultSchedules,
   normalizeSchedule,
@@ -44,7 +44,7 @@ function loadStore(): StoreData {
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<StoreData>
       return {
-        clients: parsed.clients ?? [],
+        clients: mergeSeedClients(parsed.clients ?? []),
         appointments: (parsed.appointments ?? []).filter(
           (a) => Boolean(a.clientId) && Boolean(a.stylistId),
         ),

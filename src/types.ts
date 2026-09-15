@@ -34,7 +34,24 @@ export const STYLISTS: Stylist[] = [
   { id: 'roksana', name: 'Roksana', shortName: 'Roksana', color: '#8b5e5e' },
 ]
 
-export type AppointmentStatus = 'planned' | 'done' | 'cancelled'
+export type AppointmentStatus = 'planned' | 'done' | 'cancelled' | 'no_show'
+
+export const APPOINTMENT_STATUS_LABEL: Record<AppointmentStatus, string> = {
+  planned: 'Zaplanowana',
+  done: 'Zakończona',
+  cancelled: 'Anulowana',
+  no_show: 'Klient nie przyszedł',
+}
+
+/** Statusy, które znikają z terminarza (zwalniają termin) */
+export function isAppointmentInactive(status: AppointmentStatus) {
+  return status === 'cancelled'
+}
+
+/** Wizyta przekreślona w terminarzu (zrealizowana) */
+export function isAppointmentStrikethrough(status: AppointmentStatus) {
+  return status === 'done'
+}
 
 export type Appointment = {
   id: string

@@ -8,10 +8,13 @@ import {
   Phone,
   Plus,
   Trash2,
+  X,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { SalonStore } from '../hooks/useSalonStore'
 import {
+  APPOINTMENT_STATUS_LABEL,
+  STYLISTS,
   clientFullName,
   formatPhone,
   formatPrice,
@@ -38,6 +41,16 @@ export function ClientDetail({
   const [addingService, setAddingService] = useState(false)
 
   const totalSpent = client.services.reduce((s, svc) => s + svc.price, 0)
+
+  const clientVisits = useMemo(
+    () =>
+      store.appointments
+        .filter((a) => a.clientId === client.id)
+        .sort((a, b) =>
+          `${b.date}${b.time}`.localeCompare(`${a.date}${a.time}`),
+        ),
+    [store.appointments, client.id],
+  )
 
   return (
     <div className="animate-fade-up space-y-6">
@@ -118,6 +131,67 @@ export function ClientDetail({
           </div>
         )}
       </header>
+
+      <section className="space-y-4">
+        <h2 className="font-display text-2xl font-semibold text-ink">
+          Historia wizyt
+        </h2>
+        {clientVisits.length === 0 ? (
+          <div className="rounded-3xl border border-dashed border-line bg-surface/70 px-6 py-10 text-center">
+            <p className="font-display text-lg text-ink">Brak wizyt w terminarzu</p>
+            <p className="mt-1 text-sm text-ink-muted">
+              Umówione, zakończone i nieobecności pojawią się tutaj.
+            </p>
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {clientVisits.map((apt) => {
+              const stylist = STYLISTS.find((s) => s.id === apt.stylistId)
+              const done = apt.status === 'done'
+              const noShow = apt.status === 'no_show'
+              return (
+                <li
+                  key={apt.id}
+                  className="relative flex items-start justify-between gap-4 rounded-2xl border border-line/70 bg-surface px-5 py-4"
+                >
+                  <div>
+                    <div
+                      className={
+                        done ? 'line-through decoration-ink-muted opacity-80' : ''
+                      }
+                    >
+                      <p className="font-semibold text-ink">{apt.serviceName}</p>
+                      <p className="mt-0.5 text-sm text-ink-muted">
+                        {format(parseISO(apt.date), 'd MMMM yyyy', {
+                          locale: pl,
+                        })}
+                        {' · '}
+                        {apt.time} · {apt.durationMin} min
+                        {stylist ? ` · ${stylist.name}` : ''}
+                      </p>
+                    </div>
+                    <p className="mt-1 text-xs font-semibold text-ink-muted">
+                      {APPOINTMENT_STATUS_LABEL[apt.status]}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {noShow && (
+                      <X
+                        className="h-6 w-6 text-[#c0392b]"
+                        strokeWidth={3}
+                        aria-label="Klient nie przyszedł"
+                      />
+                    )}
+                    <span className="font-display text-lg font-semibold text-forest">
+                      {formatPrice(apt.price)}
+                    </span>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </section>
 
       <section className="space-y-4">
         <div className="flex items-center justify-between gap-3">
