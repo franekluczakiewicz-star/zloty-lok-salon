@@ -8,7 +8,7 @@ Aplikacja do obsługi salonu: klienci, historia usług i osobne terminarze dla t
 - **Lokalnie:** http://127.0.0.1:5173/
 
 Jeśli widzisz starą wersję, zrób twarde odświeżenie: **Cmd+Shift+R** (Mac) lub **Ctrl+Shift+R** (Windows).  
-W menu po lewej powinno być widać napis **Wersja 15.09.2026**.
+W menu po lewej powinno być widać napis **Wersja 22.09.2026**.
 
 ## Uruchomienie lokalne
 

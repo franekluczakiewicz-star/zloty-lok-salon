@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Component, type ErrorInfo, type ReactNode, useState } from 'react'
 import { CalendarView } from './components/CalendarView'
 import { ClientDetail } from './components/ClientDetail'
 import { ClientsView } from './components/ClientsView'
@@ -10,7 +10,58 @@ import { Sidebar } from './components/Sidebar'
 import { useSalonStore } from './hooks/useSalonStore'
 import type { View } from './types'
 
-export default function App() {
+const STORAGE_KEY = 'zloty-lok-v8'
+
+class ErrorBoundary extends Component<
+  { children: ReactNode },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null }
+
+  static getDerivedStateFromError(error: Error) {
+    return { error }
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('Złoty Lok crash:', error, info)
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-4 px-6 py-10 text-center">
+          <h1 className="font-display text-3xl font-semibold text-ink">
+            Coś poszło nie tak
+          </h1>
+          <p className="text-sm text-ink-muted">
+            Aplikacja nie mogła się wczytać. Najczęściej pomaga wyczyszczenie
+            lokalnych danych i odświeżenie strony.
+          </p>
+          <pre className="overflow-auto rounded-2xl bg-fog p-3 text-left text-xs text-blush">
+            {this.state.error.message}
+          </pre>
+          <button
+            type="button"
+            className="rounded-2xl bg-forest px-5 py-3 text-sm font-semibold text-sand"
+            onClick={() => {
+              try {
+                localStorage.removeItem(STORAGE_KEY)
+              } catch {
+                /* ignore */
+              }
+              window.location.reload()
+            }}
+          >
+            Wyczyść dane i odśwież
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
+function SalonApp() {
   const store = useSalonStore()
   const [view, setView] = useState<View>('calendar')
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null)
@@ -84,5 +135,13 @@ export default function App() {
         {view === 'history' && <HistoryView store={store} />}
       </main>
     </div>
+  )
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <SalonApp />
+    </ErrorBoundary>
   )
 }

@@ -37,6 +37,49 @@ function normalizeDeleted(
     .slice(0, MAX_DELETED)
 }
 
+function normalizeClients(raw: unknown): Client[] {
+  if (!Array.isArray(raw)) return []
+  return raw.filter(
+    (c): c is Client =>
+      Boolean(c) &&
+      typeof c === 'object' &&
+      typeof (c as Client).id === 'string' &&
+      typeof (c as Client).firstName === 'string' &&
+      typeof (c as Client).lastName === 'string' &&
+      typeof (c as Client).phone === 'string' &&
+      Array.isArray((c as Client).services),
+  )
+}
+
+function normalizeAppointments(raw: unknown): Appointment[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter(
+      (a): a is Appointment =>
+        Boolean(a) &&
+        typeof a === 'object' &&
+        typeof (a as Appointment).id === 'string' &&
+        typeof (a as Appointment).clientId === 'string' &&
+        typeof (a as Appointment).stylistId === 'string' &&
+        typeof (a as Appointment).date === 'string' &&
+        typeof (a as Appointment).time === 'string',
+    )
+    .map((a) => ({
+      ...a,
+      status:
+        a.status === 'done' ||
+        a.status === 'cancelled' ||
+        a.status === 'no_show' ||
+        a.status === 'planned'
+          ? a.status
+          : 'planned',
+      personName: a.personName || 'Klient',
+      serviceName: a.serviceName || 'Usługa',
+      durationMin: Number(a.durationMin) || 30,
+      price: Number(a.price) || 0,
+    }))
+}
+
 function loadStore(): StoreData {
   const defaults = createDefaultSchedules()
   try {
@@ -44,10 +87,8 @@ function loadStore(): StoreData {
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<StoreData>
       return {
-        clients: mergeSeedClients(parsed.clients ?? []),
-        appointments: (parsed.appointments ?? []).filter(
-          (a) => Boolean(a.clientId) && Boolean(a.stylistId),
-        ),
+        clients: mergeSeedClients(normalizeClients(parsed.clients)),
+        appointments: normalizeAppointments(parsed.appointments),
         deletedAppointments: normalizeDeleted(parsed.deletedAppointments),
         schedules: {
           ania: normalizeSchedule(parsed.schedules?.ania ?? defaults.ania),
@@ -60,7 +101,7 @@ function loadStore(): StoreData {
       }
     }
   } catch {
-    /* ignore */
+    /* ignore corrupt storage */
   }
   const clients = seedClients
   return {

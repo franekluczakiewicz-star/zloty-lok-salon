@@ -34,7 +34,7 @@ export function Sidebar({ view, onNavigate, stats }: SidebarProps) {
             </p>
             <p className="text-xs text-ink-muted">Salon fryzjerski</p>
             <p className="mt-1 text-[10px] font-semibold tracking-wide text-leaf uppercase">
-              Wersja 15.09.2026
+              Wersja 22.09.2026
             </p>
           </div>
         </div>
