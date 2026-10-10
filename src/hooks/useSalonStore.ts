@@ -268,7 +268,7 @@ export function useSalonStore() {
   )
 
   const updateCatalogItem = useCallback(
-    (name: string, patch: Partial<Pick<ServiceCatalogItem, 'price' | 'priceLabel' | 'durationMin'>>) => {
+    (name: string, patch: Partial<Pick<ServiceCatalogItem, 'price' | 'priceLabel' | 'durationMin' | 'name' | 'category'>>) => {
       setCatalog((prev) =>
         prev.map((item) => {
           if (item.name !== name) return item
@@ -285,6 +285,29 @@ export function useSalonStore() {
     },
     [],
   )
+
+  const addCatalogItem = useCallback((item: ServiceCatalogItem) => {
+    const name = item.name.trim()
+    if (!name) return null
+    setCatalog((prev) => {
+      if (prev.some((c) => c.name === name)) return prev
+      return [
+        ...prev,
+        {
+          category: item.category.trim() || 'Inne',
+          name,
+          price: item.price,
+          priceLabel: item.priceLabel.trim() || `${item.price} zł`,
+          durationMin: item.durationMin || 30,
+        },
+      ]
+    })
+    return name
+  }, [])
+
+  const deleteCatalogItem = useCallback((name: string) => {
+    setCatalog((prev) => prev.filter((item) => item.name !== name))
+  }, [])
 
   const resetCatalog = useCallback(() => {
     setCatalog(SERVICE_CATALOG.map((s) => ({ ...s })))
@@ -348,6 +371,8 @@ export function useSalonStore() {
     clearDeletedAppointments,
     updateSchedule,
     updateCatalogItem,
+    addCatalogItem,
+    deleteCatalogItem,
     resetCatalog,
     searchClients,
     getClient,
