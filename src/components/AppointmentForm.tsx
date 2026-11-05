@@ -245,12 +245,14 @@ export function AppointmentForm({
       }
     }
     if (outsideSchedule) {
-      setError(
+      const reason =
         dayAvail && !dayAvail.enabled
           ? 'Wybrany dzień jest wolny w grafiku fryzjerki.'
-          : `Termin poza grafikiem (${dayAvail?.start ?? '?'}–${dayAvail?.end ?? '?'}).`,
+          : `Termin jest poza grafikiem (${dayAvail?.start ?? '?'}–${dayAvail?.end ?? '?'}).`
+      const ok = confirm(
+        `${reason}\n\nCzy mimo to umówić wizytę poza grafikiem?`,
       )
-      return
+      if (!ok) return
     }
     if (overlappingApts.length > 0) {
       const list = overlappingApts

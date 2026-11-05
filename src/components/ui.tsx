@@ -1,3 +1,5 @@
+import { useEffect } from 'react'
+
 type ModalProps = {
   title: string
   onClose: () => void
@@ -6,6 +8,14 @@ type ModalProps = {
 }
 
 export function Modal({ title, onClose, children, wide }: ModalProps) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
   return (
     <div
       className="animate-fade-in fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-4 backdrop-blur-sm sm:items-center"
@@ -31,10 +41,10 @@ export function Modal({ title, onClose, children, wide }: ModalProps) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full px-3 py-1 text-sm text-ink-muted transition hover:bg-mist hover:text-ink"
+            className="rounded-full px-3 py-1 text-lg leading-none text-ink-muted transition hover:bg-mist hover:text-ink"
             aria-label="Zamknij"
           >
-            Esc
+            ×
           </button>
         </div>
         {children}

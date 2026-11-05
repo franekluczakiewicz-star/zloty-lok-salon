@@ -462,5 +462,9 @@ export function formatPrice(price: number) {
 }
 
 export function clientFullName(client: Client) {
-  return `${client.firstName} ${client.lastName}`
+  const name = [client.firstName, client.lastName]
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .join(' ')
+  return name || 'Klient'
 }

@@ -1,6 +1,6 @@
 import { format, parseISO } from 'date-fns'
 import { pl } from 'date-fns/locale'
-import { Eye, RotateCcw, Trash2, X } from 'lucide-react'
+import { Eye, Pencil, RotateCcw, Trash2, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { SalonStore } from '../hooks/useSalonStore'
 import {
@@ -8,11 +8,13 @@ import {
   STYLISTS,
   formatDyeAmount,
   formatPrice,
+  isAppointmentInactive,
   type Appointment,
   type AppointmentStatus,
   type DeletedAppointment,
 } from '../types'
-import { Modal, btnSecondary } from './ui'
+import { AppointmentForm } from './AppointmentForm'
+import { Modal, btnPrimary, btnSecondary } from './ui'
 
 type HistoryViewProps = {
   store: SalonStore
@@ -52,6 +54,11 @@ function formatDateTime(iso: string) {
 export function HistoryView({ store }: HistoryViewProps) {
   const [filter, setFilter] = useState<FilterKey>('all')
   const [details, setDetails] = useState<HistoryRow | null>(null)
+  const [editingAptId, setEditingAptId] = useState<string | null>(null)
+
+  const editingApt = editingAptId
+    ? store.appointments.find((a) => a.id === editingAptId)
+    : undefined
 
   const rows = useMemo(() => {
     const live: HistoryRow[] = store.appointments.map((apt) => ({
@@ -94,6 +101,11 @@ export function HistoryView({ store }: HistoryViewProps) {
     return c
   }, [rows, store.deletedAppointments.length])
 
+  function openEdit(aptId: string) {
+    setDetails(null)
+    setEditingAptId(aptId)
+  }
+
   return (
     <div className="animate-fade-up space-y-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -102,7 +114,7 @@ export function HistoryView({ store }: HistoryViewProps) {
             Historia
           </h1>
           <p className="mt-1 text-ink-muted">
-            Wszystkie wizyty — zaplanowane, zakończone, usunięte i nieobecności.
+            Wszystkie wizyty — podgląd, edycja, przywracanie usuniętych.
           </p>
         </div>
         {store.deletedAppointments.length > 0 && (
@@ -169,8 +181,10 @@ export function HistoryView({ store }: HistoryViewProps) {
                 key={key}
                 className="flex flex-col gap-4 rounded-3xl border border-line/80 bg-surface p-5 sm:flex-row sm:items-center sm:justify-between"
               >
-                <div
-                  className={`min-w-0 ${done ? 'line-through opacity-80' : ''}`}
+                <button
+                  type="button"
+                  className={`min-w-0 flex-1 text-left ${done ? 'line-through opacity-80' : ''}`}
+                  onClick={() => setDetails(row)}
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-display text-xl font-semibold text-ink">
@@ -196,11 +210,11 @@ export function HistoryView({ store }: HistoryViewProps) {
                     {apt.serviceName} · {formatPrice(apt.price)}
                   </p>
                   {row.kind === 'deleted' && (
-                    <p className="mt-2 text-xs text-ink-muted">
+                    <p className="mt-2 text-xs text-ink-muted no-underline">
                       Usunięto: {formatDateTime(row.apt.deletedAt)}
                     </p>
                   )}
-                </div>
+                </button>
                 <div className="flex flex-wrap gap-2 sm:shrink-0">
                   <button
                     type="button"
@@ -208,8 +222,18 @@ export function HistoryView({ store }: HistoryViewProps) {
                     onClick={() => setDetails(row)}
                   >
                     <Eye className="h-4 w-4" />
-                    Szczegóły
+                    Podgląd
                   </button>
+                  {row.kind === 'live' && (
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-mist px-4 py-2 text-sm font-semibold text-forest transition hover:bg-forest hover:text-sand"
+                      onClick={() => openEdit(apt.id)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                      Edytuj
+                    </button>
+                  )}
                   {row.kind === 'deleted' && (
                     <>
                       <button
@@ -245,10 +269,53 @@ export function HistoryView({ store }: HistoryViewProps) {
         </ul>
       )}
 
-      {details && (
+      {details && !editingApt && (
         <HistoryDetailsModal
           row={details}
           onClose={() => setDetails(null)}
+          onEdit={
+            details.kind === 'live'
+              ? () => openEdit(details.apt.id)
+              : undefined
+          }
+          onStatus={
+            details.kind === 'live'
+              ? (status) => {
+                  const apt = details.apt
+                  store.updateAppointment(apt.id, { status })
+                  if (status === 'done' && apt.clientId) {
+                    store.addService(apt.clientId, {
+                      name: apt.serviceName,
+                      price: apt.price,
+                      durationMin: apt.durationMin,
+                      date: apt.date,
+                      notes: apt.notes,
+                    })
+                  }
+                  if (isAppointmentInactive(status)) setDetails(null)
+                  else {
+                    setDetails({
+                      kind: 'live',
+                      apt: { ...apt, status },
+                    })
+                  }
+                }
+              : undefined
+          }
+          onDelete={
+            details.kind === 'live'
+              ? () => {
+                  if (
+                    confirm(
+                      'Usunąć wizytę? Możesz ją potem przywrócić w Historii.',
+                    )
+                  ) {
+                    store.deleteAppointment(details.apt.id)
+                    setDetails(null)
+                  }
+                }
+              : undefined
+          }
           onRestore={
             details.kind === 'deleted'
               ? () => {
@@ -259,6 +326,33 @@ export function HistoryView({ store }: HistoryViewProps) {
           }
         />
       )}
+
+      {editingApt && (
+        <AppointmentForm
+          clients={store.clients}
+          appointments={store.appointments}
+          schedules={store.schedules}
+          catalog={store.catalog}
+          initialDate={editingApt.date}
+          appointment={editingApt}
+          onAddClient={store.addClient}
+          onClose={() => setEditingAptId(null)}
+          onSave={(data) => {
+            const wasDone = editingApt.status === 'done'
+            store.updateAppointment(editingApt.id, data)
+            if (data.status === 'done' && !wasDone && data.clientId) {
+              store.addService(data.clientId, {
+                name: data.serviceName,
+                price: data.price,
+                durationMin: data.durationMin,
+                date: data.date,
+                notes: data.notes,
+              })
+            }
+            setEditingAptId(null)
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -266,10 +360,16 @@ export function HistoryView({ store }: HistoryViewProps) {
 function HistoryDetailsModal({
   row,
   onClose,
+  onEdit,
+  onStatus,
+  onDelete,
   onRestore,
 }: {
   row: HistoryRow
   onClose: () => void
+  onEdit?: () => void
+  onStatus?: (status: AppointmentStatus) => void
+  onDelete?: () => void
   onRestore?: () => void
 }) {
   const apt = row.apt
@@ -277,54 +377,112 @@ function HistoryDetailsModal({
   const statusLabel =
     row.kind === 'deleted' ? 'Usunięta' : APPOINTMENT_STATUS_LABEL[apt.status]
 
+  const statuses: AppointmentStatus[] = [
+    'planned',
+    'done',
+    'no_show',
+    'cancelled',
+  ]
+
   return (
-    <Modal title="Szczegóły wizyty" onClose={onClose}>
-      <div className="space-y-3">
-        <p className="text-xs font-semibold tracking-widest text-ink-muted uppercase">
-          {statusLabel}
-        </p>
-        <h3 className="font-display text-2xl font-semibold text-ink">
-          {apt.personName}
-        </h3>
-        <p className="text-sm text-ink-muted">
-          {formatVisitDate(apt.date)} · {apt.time} · {apt.durationMin} min
-          {stylist ? ` · ${stylist.name}` : ''}
-        </p>
-        <p className="text-sm text-ink">{apt.serviceName}</p>
-        <p className="font-display text-lg font-semibold text-forest">
-          {formatPrice(apt.price)}
-        </p>
-        {(apt.dyeColor || apt.dyeAmountG) && (
-          <p className="text-sm text-ink">
-            Farba: <span className="font-semibold">{apt.dyeColor || '—'}</span>
-            {apt.dyeAmountG != null && (
-              <span className="text-ink-muted">
-                {' '}
-                · {formatDyeAmount(apt.dyeAmountG)}
-              </span>
-            )}
+    <Modal title="Podgląd wizyty" onClose={onClose} wide>
+      <div className="space-y-5">
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-ink-muted uppercase">
+            {statusLabel}
           </p>
-        )}
-        {apt.notes && (
-          <p className="rounded-2xl bg-fog px-4 py-3 text-sm text-ink-muted">
-            {apt.notes}
+          <h3 className="mt-1 font-display text-2xl font-semibold text-ink">
+            {apt.personName}
+          </h3>
+          <p className="mt-1 text-sm text-ink-muted">
+            {formatVisitDate(apt.date)} · {apt.time} · {apt.durationMin} min
+            {stylist ? ` · ${stylist.name}` : ''}
           </p>
-        )}
-        {row.kind === 'deleted' && (
-          <p className="text-xs text-ink-muted">
-            Usunięto: {formatDateTime(row.apt.deletedAt)}
+          <p className="mt-1 text-sm text-ink">{apt.serviceName}</p>
+          <p className="mt-1 font-display text-lg font-semibold text-forest">
+            {formatPrice(apt.price)}
           </p>
+          {(apt.dyeColor || apt.dyeAmountG) && (
+            <p className="mt-2 text-sm text-ink">
+              Farba: <span className="font-semibold">{apt.dyeColor || '—'}</span>
+              {apt.dyeAmountG != null && (
+                <span className="text-ink-muted">
+                  {' '}
+                  · {formatDyeAmount(apt.dyeAmountG)}
+                </span>
+              )}
+            </p>
+          )}
+          {apt.notes && (
+            <p className="mt-3 rounded-2xl bg-fog px-4 py-3 text-sm text-ink-muted">
+              {apt.notes}
+            </p>
+          )}
+          {row.kind === 'deleted' && (
+            <p className="mt-2 text-xs text-ink-muted">
+              Usunięto: {formatDateTime(row.apt.deletedAt)}
+            </p>
+          )}
+        </div>
+
+        {onStatus && (
+          <div>
+            <p className="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase">
+              Status wizyty
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {statuses.map((s) => {
+                const active = apt.status === s
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => onStatus(s)}
+                    className={`rounded-2xl border px-3 py-2.5 text-left text-sm font-semibold transition ${
+                      active
+                        ? 'border-forest bg-mist text-forest ring-2 ring-forest/20'
+                        : 'border-line bg-fog text-ink-muted hover:bg-surface hover:text-ink'
+                    }`}
+                  >
+                    {APPOINTMENT_STATUS_LABEL[s]}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
         )}
-        {onRestore && (
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 rounded-xl bg-mist px-4 py-2 text-sm font-semibold text-forest transition hover:bg-forest hover:text-sand"
-            onClick={onRestore}
-          >
-            <RotateCcw className="h-4 w-4" />
-            Przywróć do terminarza
+
+        <div className="flex flex-wrap gap-2 border-t border-line/60 pt-4">
+          {onEdit && (
+            <button type="button" className={btnPrimary} onClick={onEdit}>
+              <Pencil className="h-4 w-4" />
+              Edytuj wizytę
+            </button>
+          )}
+          {onRestore && (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-2xl bg-mist px-5 py-3 text-sm font-semibold text-forest transition hover:bg-forest hover:text-sand"
+              onClick={onRestore}
+            >
+              <RotateCcw className="h-4 w-4" />
+              Przywróć do terminarza
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-2xl border border-blush/40 bg-blush/10 px-5 py-3 text-sm font-semibold text-blush transition hover:bg-blush/20"
+              onClick={onDelete}
+            >
+              <Trash2 className="h-4 w-4" />
+              Usuń
+            </button>
+          )}
+          <button type="button" className={btnSecondary} onClick={onClose}>
+            Zamknij
           </button>
-        )}
+        </div>
       </div>
     </Modal>
   )

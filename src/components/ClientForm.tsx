@@ -30,12 +30,12 @@ export function ClientForm({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!firstName.trim() || !lastName.trim() || !phone.trim()) {
-      setError('Imię, nazwisko i telefon są wymagane.')
+    if (!firstName.trim() && !lastName.trim()) {
+      setError('Podaj imię lub nazwisko — reszta danych jest opcjonalna.')
       return
     }
     onSave({
-      firstName: firstName.trim(),
+      firstName: firstName.trim() || 'Klient',
       lastName: lastName.trim(),
       phone: phone.trim(),
       email: email.trim() || undefined,
@@ -46,6 +46,9 @@ export function ClientForm({
   return (
     <Modal title={title} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
+        <p className="text-sm text-ink-muted">
+          Wystarczy imię lub nazwisko. Telefon i e-mail możesz uzupełnić później.
+        </p>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Imię">
             <input
@@ -56,7 +59,7 @@ export function ClientForm({
               autoFocus
             />
           </Field>
-          <Field label="Nazwisko">
+          <Field label="Nazwisko (opcjonalnie)">
             <input
               className={inputClass}
               value={lastName}
@@ -65,7 +68,7 @@ export function ClientForm({
             />
           </Field>
         </div>
-        <Field label="Telefon">
+        <Field label="Telefon (opcjonalnie)">
           <input
             className={inputClass}
             value={phone}
@@ -83,7 +86,7 @@ export function ClientForm({
             placeholder="klient@email.com"
           />
         </Field>
-        <Field label="Notatki">
+        <Field label="Notatki (opcjonalnie)">
           <textarea
             className={`${inputClass} min-h-24 resize-y`}
             value={notes}

@@ -120,14 +120,14 @@ function ClientCard({
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-mist font-display text-lg font-semibold text-forest transition group-hover:bg-forest group-hover:text-sand">
-              {client.firstName[0]}
-              {client.lastName[0]}
+              {(client.firstName[0] || client.lastName[0] || '?').toUpperCase()}
+              {client.lastName[0]?.toUpperCase() || ''}
             </div>
             <div>
               <p className="font-semibold text-ink">{clientFullName(client)}</p>
               <p className="mt-0.5 flex items-center gap-1.5 text-sm text-ink-muted">
                 <Phone className="h-3.5 w-3.5" />
-                {formatPhone(client.phone)}
+                {client.phone ? formatPhone(client.phone) : 'Brak telefonu'}
               </p>
             </div>
           </div>
